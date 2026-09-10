@@ -285,7 +285,7 @@ function update() {
     document.getElementById("main_lngi_bar").innerHTML = `${u[0]} to next ordinal (${u[1]} left)`
     document.getElementById("tps").innerHTML = `${tps.toFixed(1)} tps`
     if (page == 3 && sync_mountain.checked) { document.getElementById("input").value = trimStringList(u[2], MaxYTerms.valueAsNumber) }
-    if (page == 0) {
+    if (page == 2) {
         analysisPanels.forEach(panel => {
             let txt = "";
             switch (panel.notation) {
