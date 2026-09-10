@@ -278,7 +278,7 @@ function update() {
     last_tick = now;
     var deltaRealTime = now - lastRealTime;
     lastRealTime = now;
-    virtualElapsed = 0;
+    virtualElapsed = 1;
     var simulatedTime = st + virtualElapsed + timeOffset;
     var u = num_time(simulatedTime);
 
