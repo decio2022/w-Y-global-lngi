@@ -304,13 +304,6 @@ function update() {
     let timeStatusText = "";
     const trueElapsedSeconds = Math.max(0, (now - st) / 1000);
     const diff = modifiedElapsedSeconds - trueElapsedSeconds;
-    if (Math.abs(diff) > 0.1 || Math.abs(timeSpeed - 1.0) > 0.001) {
-        if (diff > 0) {
-            timeStatusText = ` <b style="color: red;">(forwarded ${formatSeconds(Math.abs(diff))})</b>`;
-        } else if (diff < 0) {
-            timeStatusText = ` <b style="color: blue;">(backwarded ${formatSeconds(Math.abs(diff))})</b>`;
-        }
-    }
     document.getElementById("time").innerHTML =
         `Time elapsed: ${formatSeconds(modifiedElapsedSeconds)}${timeStatusText}
         `;
