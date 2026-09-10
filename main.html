@@ -23,7 +23,7 @@
         </div>
         <div class="status-row">
             <div class="status-buttons">
-                <button id="btn_lngi">Lngi & Analysis</button>
+                <button id="btn_lngi" hidden>Lngi & Analysis</button>
                 <button id="btn_progress">Progress</button>
                 <button id="btn_search">Virtual Elapsed</button>
                 <button id="btn_milestone" hidden>Milestone</button>
@@ -50,33 +50,6 @@
         <div id="main_lngi_Content">Loading main sequence...</div>
         <div class="resize-handle"></div>
     </div>
-
-    <div class="analysis-toolbar" id="analysis_toolbar">
-
-        <button id="analysis_add">Add</button>
-
-        <select id="analysis_add_type">
-            <option value="wY">ω-Y</option>
-            <option value="BMS">BMS</option>
-            <option value="DBMS">DBMS</option>
-            <option value="2-shifted OCF">2-shifted OCF</option>
-            <option value="cOCF">cOCF</option>
-            <option value="EcOCF">Extended cOCF</option>
-            <option value="BcOCF">Bufed cOCF</option>
-            <option value="PMS">PMS</option>
-            <option value="AMS">AMS</option>
-            <option value="0Y">0-Y</option>
-            <option value="Vulcaniz">Vulcaniz</option>
-        </select>
-        <button id="btn_save_layout"
-            style="background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; margin-left: 15px;">Save
-            Layout</button>
-        <button id="btn_load_layout" style="background-color: #cce5ff; color: #004085; border: 1px solid #b8daff;">Load
-            Layout</button>
-
-    </div>
-
-    <div id="analysis_container"></div>
 
     <div class="card milestone-header" id="milestone_header">
 
@@ -201,6 +174,33 @@
             Or go to specific time: <input id="sex">
             <button onclick="specific_time()" style="padding: 4px 10px; cursor: pointer;">Go!</button>
         </div>
+        <br>
+        <div class="analysis-toolbar" id="analysis_toolbar">
+
+        <button id="analysis_add">Add</button>
+
+        <select id="analysis_add_type">
+            <option value="wY">ω-Y</option>
+            <option value="BMS">BMS</option>
+            <option value="DBMS">DBMS</option>
+            <option value="2-shifted OCF">2-shifted OCF</option>
+            <option value="cOCF">cOCF</option>
+            <option value="EcOCF">Extended cOCF</option>
+            <option value="BcOCF">Bufed cOCF</option>
+            <option value="PMS">PMS</option>
+            <option value="AMS">AMS</option>
+            <option value="0Y">0-Y</option>
+            <option value="Vulcaniz">Vulcaniz</option>
+        </select>
+        <button id="btn_save_layout"
+            style="background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; margin-left: 15px;">Save
+            Layout</button>
+        <button id="btn_load_layout" style="background-color: #cce5ff; color: #004085; border: 1px solid #b8daff;">Load
+            Layout</button>
+
+    </div>
+
+    <div id="analysis_container"></div>
     </div>
 
     <div id="mountain" hidden>
