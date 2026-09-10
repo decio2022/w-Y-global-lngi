@@ -277,6 +277,6 @@ function search_time(x = document.getElementById("search_input").value) {
 
 function specific_time() {
     var n = search_time(document.getElementById('sex').value)[0]
-    virtualElapsed = (Date.now() - st) / timeSpeed; 
+    virtualElapsed = (Date.now() - st) / 1;
     if (n != 0) timeOffset = -(Date.now() - st) + get_time_inv(n)
 }
