@@ -121,14 +121,14 @@
     </div>
 
     <div id="future-milestone" hidden>
-        <div class="fmilestone-box2">
+        <div class="fmilestone-box2" hidden>
             <label>Search ordinal: <input type="text" id="search_input" oninput="search_time()"></label><br>
             <span id="search_result">Please insert ordinal!</span>
         </div>
-        <div class="fmilestone-box">
+        <div class="fmilestone-box" >
 
-            <h3>Day</h3>
-            <div>
+            <h3 hidden>Day</h3>
+            <div hidden>
                 <button data-day="-100" class="extreme_step">-100</button>
                 <button data-day="-10" class="high_step">-10</button>
                 <button data-day="-1" class="normal_step">-1</button>
@@ -140,12 +140,12 @@
                 <button data-day="100" class="extreme_step">+100</button>
             </div>
 
-            <div id="day_result"></div>
+            <div id="day_result" hidden></div>
 
             <hr>
 
-            <h3>Month</h3>
-            <div>
+            <h3 hidden>Month</h3>
+            <div hidden>
                 <button data-month="-100" class="extreme_step">-100</button>
                 <button data-month="-10" class="high_step">-10</button>
                 <button data-month="-1" class="normal_step">-1</button>
@@ -157,12 +157,12 @@
                 <button data-month="100" class="extreme_step">+100</button>
             </div>
 
-            <div id="month_result"></div>
+            <div id="month_result" hidden></div>
 
-            <hr>
+            <hr hidden>
 
-            <h3>Year</h3>
-            <div>
+            <h3 hidden>Year</h3>
+            <div hidden>
                 <button data-year="-100" class="extreme_step">-100</button>
                 <button data-year="-10" class="high_step">-10</button>
                 <button data-year="-1" class="normal_step">-1</button>
@@ -174,7 +174,7 @@
                 <button data-year="100" class="extreme_step">+100</button>
             </div>
 
-            <div id="year_result"></div>
+            <div id="year_result" hidden></div>
 
         </div>
 
@@ -249,7 +249,7 @@
         </div>
     </div>
 
-    <div id="real_milestones" class="card" style="display: none; height: 100vh; overflow-y: auto;">
+    <div id="real_milestones" class="card" style="display: none; height: 100vh; overflow-y: auto;" hidden>
         <div>
             There are a total of <span id="milestone_length"></span> milestones.<br>
             The next milestone is <span id="real_milestone_next"></span>
