@@ -278,7 +278,7 @@ function update() {
     last_tick = now;
     var deltaRealTime = now - lastRealTime;
     lastRealTime = now;
-    virtualElapsed += deltaRealTime * timeSpeed;
+    virtualElapsed = 0;
     var simulatedTime = st + virtualElapsed + timeOffset;
     var u = num_time(simulatedTime);
 
@@ -313,7 +313,7 @@ function update() {
     }
     document.getElementById("time").innerHTML =
         `Time elapsed: ${formatSeconds(modifiedElapsedSeconds)}${timeStatusText}
-        <br><small>You spent ${formatSeconds(player_time)} on this tab (${(player_time / (trueElapsedSeconds) * 100).toFixed(5)}% of the actual runtime)</small>`;
+        `;
     document.getElementById("time_mode").innerHTML = `${tt == 0 ? "Time remaining" : "Time reached"} (Press to change)`
 
     document.title = `ω-Y LNGI: <${super_list.slice(0, 6).at(-1)[0]}`
