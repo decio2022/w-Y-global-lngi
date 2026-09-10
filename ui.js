@@ -100,7 +100,7 @@ btn_progress.addEventListener("click", () => {
 const btn_search = document.getElementById("btn_search");
 
 btn_search.addEventListener("click", () => {
-    page = 2;
+    page = 0;
     update_page()
 });
 
