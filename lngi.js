@@ -3,7 +3,7 @@ const analysisContainer = document.getElementById("analysis_container");
 let st = (1782316800000 + 23 * 3600000) + 864 * 1000
 var timeSpeed = 1.0;
 var timeOffset = 0;       
-var virtualElapsed = Date.now() - st; 
+var virtualElapsed = 1; 
 var lastRealTime = Date.now();
 
 function loadMisc() {
@@ -278,7 +278,6 @@ function update() {
     last_tick = now;
     var deltaRealTime = now - lastRealTime;
     lastRealTime = now;
-    virtualElapsed = 1;
     var simulatedTime = st + virtualElapsed + timeOffset;
     var u = num_time(simulatedTime);
 
