@@ -100,7 +100,7 @@ btn_progress.addEventListener("click", () => {
 const btn_search = document.getElementById("btn_search");
 
 btn_search.addEventListener("click", () => {
-    page = 0;
+    page = 2;
     update_page()
 });
 
@@ -126,8 +126,8 @@ btn_buddy.addEventListener("click", () => {
 });
 
 function update_page() {
-    document.getElementById("analysis_container").style.display = page == 0 ? "flex" : "none"
-    document.getElementById("analysis_toolbar").style.display = page == 0 ? "flex" : "none"
+    document.getElementById("analysis_container").style.display = page == 2 ? "flex" : "none"
+    document.getElementById("analysis_toolbar").style.display = page == 2 ? "flex" : "none"
     document.getElementById("milestone_header").style.display = page == 1 ? "flex" : "none"
     document.getElementById("scratch_bars").hidden = (page != 1)
     document.getElementById("future-milestone").hidden = (page != 2)
