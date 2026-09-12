@@ -276,7 +276,7 @@ let MaxYTerms = document.getElementById("MaxTerms")
 function update() {
     var now = Date.now();
     tps = 1000 / (now - last_tick);
-    virtualElapsed += 60*(pause%2)
+    virtualElapsed += 10*(pause%2)
     last_tick = now;
     var deltaRealTime = now - lastRealTime;
     lastRealTime = now;
