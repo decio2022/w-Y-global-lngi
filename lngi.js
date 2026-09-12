@@ -4,6 +4,7 @@ let st = (1782316800000 + 23 * 3600000) + 864 * 1000
 var timeSpeed = 1.0;
 var timeOffset = 0;       
 var virtualElapsed = 1; 
+var pause = 2;
 var lastRealTime = Date.now();
 
 function loadMisc() {
@@ -275,6 +276,7 @@ let MaxYTerms = document.getElementById("MaxTerms")
 function update() {
     var now = Date.now();
     tps = 1000 / (now - last_tick);
+    virtualElapsed += 1*(pause%2)
     last_tick = now;
     var deltaRealTime = now - lastRealTime;
     lastRealTime = now;
