@@ -83,7 +83,7 @@ var lt = 0
 function update_scratch_bars(x, currentSimulatedTime) {
     for (var i = 0; i < 53; i++) {
         if (i < super_list.length) {
-            var u = x + super_list[i][2] / (2 ** super_list[i][1] / 2)
+            var u = x + super_list[i][2] / (milestoneMulti ** super_list[i][1] / 2)
             if (i == 0) {
                 u = Math.ceil(x)
             }
@@ -114,7 +114,7 @@ scratch_bar_init()
 var super_list = []
 
 
-function ntl(m,multi) {
+function ntl(m) {
     super_list = []
     var ord = `1,${Math.max(1, Math.floor(m))}`
     var steps = 0
@@ -127,7 +127,7 @@ function ntl(m,multi) {
         var exp = 0
         while (m <= 1) {
             steps = steps + 1
-            m = m * multi
+            m = m * 2
             exp = exp + 1
         }
         var base = Y_Sequence.fs(ord, exp).split(",")
@@ -155,7 +155,7 @@ function ntl(m,multi) {
 
 function num_to_lngi(m) {
     var m = m - m % 1 + 0.5 + 0.5 * (m % 1)
-    return ntl(m,milestoneMulti)
+    return ntl(m)
 }
 
 function get_time(t) {
@@ -282,7 +282,7 @@ function update() {
     virtualElapsed += deltaRealTime*(pause%2)
     lastRealTime = now;
     var simulatedTime = st + virtualElapsed + timeOffset;
-    var u = num_time(virtualElapsed);
+    var u = num_time(simulatedTime);
 
     document.getElementById("main_lngi_Content").innerHTML = `<i>${u[2]}</i>`
     document.getElementById("main_lngi_bar").innerHTML = `${u[0]} to next ordinal (${u[1]} left)`
