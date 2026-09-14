@@ -83,7 +83,7 @@ var lt = 0
 function update_scratch_bars(x, currentSimulatedTime) {
     for (var i = 0; i < 53; i++) {
         if (i < super_list.length) {
-            var u = x + super_list[i][2] / (2 ** super_list[i][1] / 3)
+            var u = x + super_list[i][2] / (2 ** super_list[i][1] / 2)
             if (i == 0) {
                 u = Math.ceil(x)
             }
