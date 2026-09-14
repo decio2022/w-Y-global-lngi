@@ -4,6 +4,7 @@ let st = (1782316800000 + 23 * 3600000) + 864 * 1000
 var timeSpeed = 1.0;
 var timeOffset = 0;       
 var virtualElapsed = 1; 
+var milestoneMulti = 2;
 var pause = 2;
 var lastRealTime = Date.now();
 
@@ -154,7 +155,7 @@ function ntl(m) {
 
 function num_to_lngi(m) {
     var m = m - m % 1 + 0.5 + 0.5 * (m % 1)
-    return ntl(m)
+    return ntl(m,milestoneMulti)
 }
 
 function get_time(t) {
