@@ -4,7 +4,7 @@ let st = (1782316800000 + 23 * 3600000) + 864 * 1000
 var timeSpeed = 1.0;
 var timeOffset = 0;       
 var virtualElapsed = 1; 
-var milestoneMulti = 2;
+var milestoneMulti = 1;
 var pause = 2;
 var lastRealTime = Date.now();
 
@@ -159,11 +159,11 @@ function num_to_lngi(m) {
 }
 
 function get_time(t) {
-    return (Math.log10(1 + t / 864000) / 2 + 2)
+    return (Math.log10(1 + t / 864000) / 2 + 2) / milestoneMulti
 }
 
 function get_time_inv(n) {
-    return (10 ** ((n - 2) * milestoneMulti) - 1) * 864000
+    return (10 ** ((n - 2) * 2) - 1) * 864000 * milestoneMulti
 }
 
 function renderAnalysisPanels() {
