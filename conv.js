@@ -8751,9 +8751,9 @@ function convert_From_wY(ord, mode) {
     if (mode == "BMS") {
         if (Y_Sequence.cmp(ord, '1,2,4,8,16,32,64,128,256,512') == -1) {
             if (compress_BMS.checked)
-                return Conv_Y_sequence_BMS(ord).map(p => `(${p.join(',').replace(/(,?0)*$/, '')})`).join('')
+               return Conv_Y_sequence_BMS(ord).map(p => `(${p.join(',')})`).join('').replaceAll(",0", "").replaceAll("(0)","()")
             else
-                return Conv_Y_sequence_BMS(ord).map(p => `(${p.join(',')})`).join('');
+               return Conv_Y_sequence_BMS(ord).map(p => `(${p.join(',')})`).join('');
         }
         if (ord == '1,3') return 'Lim(BMS)'
         return ord;
@@ -8763,7 +8763,7 @@ function convert_From_wY(ord, mode) {
         if (Y_Sequence.cmp(ord, '1,3') == -1) {
             if (typeof ord == 'string') ord = ord.split(',')
             if (compress_BMS.checked)
-                return Y_to_DBMS(ord).map(p => `(${p.join(',').replace(/(,?0)*$/, '')})`).join('')
+                return Y_to_DBMS(ord).map(p => `(${p.join(',')})`).join('').replaceAll(",0", "").replaceAll("(0)", "()")
             else
                 return Y_to_DBMS(ord).map(p => `(${p.join(',')})`).join('');
         }
