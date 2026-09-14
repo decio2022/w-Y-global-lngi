@@ -83,7 +83,7 @@ var lt = 0
 function update_scratch_bars(x, currentSimulatedTime) {
     for (var i = 0; i < 53; i++) {
         if (i < super_list.length) {
-            var u = x + super_list[i][2] / ((2 ** super_list[i][1] / 3) / milestoneMulti)
+            var u = x + super_list[i][2] / (2 ** super_list[i][1] / 3)
             if (i == 0) {
                 u = Math.ceil(x)
             }
@@ -159,11 +159,11 @@ function num_to_lngi(m) {
 }
 
 function get_time(t) {
-    return (Math.log10(1 + t / 864000) / 2 + 2) / milestoneMulti
+    return (Math.log10(1 + t / 864000) / 2 + 2)
 }
 
 function get_time_inv(n) {
-    return (10 ** ((n - 2) * 2) - 1) * 864000 * milestoneMulti
+    return (10 ** ((n - 2) * 2) - 1) * 864000
 }
 
 function renderAnalysisPanels() {
