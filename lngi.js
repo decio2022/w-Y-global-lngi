@@ -287,6 +287,7 @@ function update() {
     document.getElementById("main_lngi_Content").innerHTML = `<i>${u[2]}</i>`
     document.getElementById("main_lngi_bar").innerHTML = `${u[0]} to next ordinal (${u[1]} left)`
     document.getElementById("tps").innerHTML = `${tps.toFixed(1)} tps`
+    document.getElementById("milestoneMulti").innerHTML = milestoneMulti
     if (page == 3 && sync_mountain.checked) { document.getElementById("input").value = trimStringList(u[2], MaxYTerms.valueAsNumber) }
     if (page == 2) {
         analysisPanels.forEach(panel => {
