@@ -282,7 +282,7 @@ function update() {
     virtualElapsed += deltaRealTime*(pause%2)
     lastRealTime = now;
     var simulatedTime = st + virtualElapsed + timeOffset;
-    var u = num_time(simulatedTime);
+    var u = num_time(virtualElapsed);
 
     document.getElementById("main_lngi_Content").innerHTML = `<i>${u[2]}</i>`
     document.getElementById("main_lngi_bar").innerHTML = `${u[0]} to next ordinal (${u[1]} left)`
