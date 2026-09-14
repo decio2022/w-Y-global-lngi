@@ -68,7 +68,7 @@ function formatSeconds(totalSeconds) {
     return parts.filter(Boolean).join(' ');
 }
 function scratch_bar_init() {
-    for (var i = 0; i < 53; i++) {
+    for (var i = 0; i < 75; i++) {
         const p = document.createElement("div")
         p.style.height = "6.25%";
         p.style.position = "absolute";
@@ -81,7 +81,7 @@ function scratch_bar_init() {
 
 var lt = 0
 function update_scratch_bars(x, currentSimulatedTime) {
-    for (var i = 0; i < 53; i++) {
+    for (var i = 0; i < 75; i++) {
         if (i < super_list.length) {
             var u = x + super_list[i][2] / (2 ** super_list[i][1] / 2)
             if (i == 0) {
