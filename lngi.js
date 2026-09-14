@@ -119,7 +119,7 @@ function ntl(m,multi) {
     var ord = `1,${Math.max(1, Math.floor(m))}`
     var steps = 0
     var m = 1 - (m % 1)
-    while (ord.length < 100 && ord.split(",").at(-1) < 1e8 && steps < 75) {
+    while (ord.length < 100 && ord.split(",").at(-1) < 1e8 && steps < 53) {
         super_list = super_list.concat([[ord, steps, m]])
         if (m <= 1e-14) {
             break
@@ -141,11 +141,11 @@ function ntl(m,multi) {
 
             super_list.push([ord, steps, m]);
 
-            steps = 91
+            steps = 69
             break;
         }
     }
-    if (steps == 75) {
+    if (steps == 53) {
         ord = ord.split(",");
         ord.pop();
         ord = ord.join(",");
