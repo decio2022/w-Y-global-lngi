@@ -4,7 +4,7 @@ let st = (1782316800000 + 23 * 3600000) + 864 * 1000
 var timeSpeed = 1.0;
 var timeOffset = 0;       
 var virtualElapsed = 1; 
-var milestoneMulti = 2;
+var milestoneMulti = 5;
 var pause = 2;
 var lastRealTime = Date.now();
 
@@ -114,7 +114,7 @@ scratch_bar_init()
 var super_list = []
 
 
-function ntl(m) {
+function ntl(m,multi) {
     super_list = []
     var ord = `1,${Math.max(1, Math.floor(m))}`
     var steps = 0
@@ -127,7 +127,7 @@ function ntl(m) {
         var exp = 0
         while (m <= 1) {
             steps = steps + 1
-            m = m * 2
+            m = m * multi
             exp = exp + 1
         }
         var base = Y_Sequence.fs(ord, exp).split(",")
