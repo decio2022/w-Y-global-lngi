@@ -282,6 +282,6 @@ function specific_time() {
 }
 
 function autovirtualElapsed(){
-    var n = document.getElementById('virus').value
+    var n = document.getElementById('virus').input
     virtualElapsed = n
 }
