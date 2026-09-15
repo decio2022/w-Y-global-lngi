@@ -80,7 +80,7 @@ Scratch_bar_height.addEventListener("input", function () {
     );
 });
 
-let page = 0; // 0: main, 1: progress, 2: milestone (and 3: some cool mountain)
+let page = 2; // 0: main, 1: progress, 2: milestone (and 3: some cool mountain)
 //did u even do that
 //just compress it into a SINGLE FUNCTION thats so good :3
 const btn_lngi = document.getElementById("btn_lngi");

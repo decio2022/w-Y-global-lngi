@@ -8,6 +8,16 @@ var milestoneMulti = 1;
 var pause = 2;
 var lastRealTime = Date.now();
 
+function save(){
+    localStorage.setItem('virtualElapsed', JSON.stringify(virtualElapsed));
+}
+
+function load_save(){
+    if (localStorage.getItem('virtualElapsed')){
+        virtualElapsed = JSON.parse(localStorage.getItem('virtualElapsed'));
+    }
+}
+
 function loadMisc() {
     try {
         const savedMisc = localStorage.getItem("lngi_app_misc");
@@ -274,6 +284,7 @@ var last_tick = Date.now()
 let sync_mountain = document.getElementById("_UPDATEMODE")
 let MaxYTerms = document.getElementById("MaxTerms")
 
+load_save()
 function update() {
     var now = Date.now();
     tps = 1000 / (now - last_tick);
@@ -328,5 +339,6 @@ function update() {
     }
 
     saveMisc()
+    save()
     requestAnimationFrame(update);
 }
