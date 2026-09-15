@@ -291,6 +291,7 @@ function update() {
     last_tick = now;
     var deltaRealTime = now - lastRealTime;
     virtualElapsed += deltaRealTime*(pause%2)
+    console.log(deltaRealTime)
     lastRealTime = now;
     var simulatedTime = st + virtualElapsed + timeOffset;
     var u = num_time(simulatedTime);
