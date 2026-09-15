@@ -340,6 +340,6 @@ function update() {
     }
 
     saveMisc()
-    save()
     requestAnimationFrame(update);
 }
+save()
