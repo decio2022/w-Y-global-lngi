@@ -303,7 +303,7 @@ function update() {
             panel.element.innerHTML = txt;
         })
     };
-    const modifiedElapsedSeconds = Math.max(0, (virtualElapsed + timeOffset) / 1000).floor();
+    const modifiedElapsedSeconds = Math.max(0, (virtualElapsed + timeOffset) / 1000);
     let timeStatusText = modifiedElapsedSeconds * 1000;
     const trueElapsedSeconds = Math.max(0, (now - st) / 1000);
     const diff = modifiedElapsedSeconds - trueElapsedSeconds;
