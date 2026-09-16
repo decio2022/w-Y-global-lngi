@@ -282,6 +282,6 @@ function specific_time() {
 }
 
 function autovirtualElapsed(){
-    var n = document.getElementById('virus').toString()
-    virtualElapsed = n
+    var n = document.getElementById('virus').value
+    virtualElapsed = n * milestoneMulti
 }

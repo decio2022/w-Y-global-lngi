@@ -95,7 +95,7 @@ function update_scratch_bars(x, currentSimulatedTime) {
                 document.getElementById(`bar_${i}`).style.visibility = "visible"
                 document.getElementById(`bar_${i}`).innerHTML =
                     `${convert_From_wY(super_list[i][0] + (i == super_list.length - 1 ? ",1" : ""), scratch_bar_display)} <small>(${((1 - super_list[i][2]) * 100).toFixed(2)}% / 
-                ${tt == 0 ? `${formatSeconds(secondsLeft)} left` : `in ${new Date(secondsLeft * 1000 + currentSimulatedTime).toLocaleString()}`})</small>`
+                ${tt == 0 ? `${formatSeconds(secondsLeft)} left / ${secondsLeft*1000}` : `in ${new Date(secondsLeft * 1000 + currentSimulatedTime).toLocaleString()}`})</small>`
 
                 document.getElementById(`bar_${i}`).style.backgroundColor = `hsl(${super_list[i][1] * 10},100%,90%)`
                 document.getElementById(`bar_${i}`).style.width = `${(1 - super_list[i][2]) * 100}%`
@@ -304,11 +304,11 @@ function update() {
         })
     };
     const modifiedElapsedSeconds = Math.max(0, (virtualElapsed + timeOffset) / 1000);
-    let timeStatusText = "";
+    let timeStatusText = modifiedElapsedSeconds * 1000;
     const trueElapsedSeconds = Math.max(0, (now - st) / 1000);
     const diff = modifiedElapsedSeconds - trueElapsedSeconds;
     document.getElementById("time").innerHTML =
-        `Time elapsed: ${formatSeconds(modifiedElapsedSeconds)}${timeStatusText}
+        `Time elapsed: ${formatSeconds(modifiedElapsedSeconds)} Virtual Elapsed ${timeStatusText}
         `;
     document.getElementById("time_mode").innerHTML = `${tt == 0 ? "Time remaining" : "Time reached"} (Press to change)`
 
