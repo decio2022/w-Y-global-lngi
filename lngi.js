@@ -303,12 +303,12 @@ function update() {
             panel.element.innerHTML = txt;
         })
     };
-    const modifiedElapsedSeconds = Math.max(0, (virtualElapsed + timeOffset) / 1000);
+    const modifiedElapsedSeconds = Math.max(0, (virtualElapsed + timeOffset) / 1000).floor();
     let timeStatusText = modifiedElapsedSeconds * 1000;
     const trueElapsedSeconds = Math.max(0, (now - st) / 1000);
     const diff = modifiedElapsedSeconds - trueElapsedSeconds;
     document.getElementById("time").innerHTML =
-        `Time elapsed: ${formatSeconds(modifiedElapsedSeconds)} Virtual Elapsed ${timeStatusText.floor()}
+        `Time elapsed: ${formatSeconds(modifiedElapsedSeconds)} Virtual Elapsed ${timeStatusText}
         `;
     document.getElementById("time_mode").innerHTML = `${tt == 0 ? "Time remaining" : "Time reached"} (Press to change)`
 
