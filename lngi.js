@@ -322,9 +322,16 @@ function update() {
     }
 
     if (page == 5) {
-        var u2 = num_time(player_time * 1000 + st, false)
-        document.getElementById("buddy_lngi").innerHTML = u2[2]
-        document.getElementById("buddy_next").innerHTML = u2[0]
+        document.getElementById("buddy_lngi1").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 1).at(-1)[0]}`
+        document.getElementById("buddy_lngi2").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 2).at(-1)[0]}`
+        document.getElementById("buddy_lngi3").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 3).at(-1)[0]}`
+        document.getElementById("buddy_lngi4").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 4).at(-1)[0]}`
+        document.getElementById("buddy_lngi5").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 5).at(-1)[0]}`
+        document.getElementById("buddy_lngi6").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 6).at(-1)[0]}`
+        document.getElementById("buddy_lngi7").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 7).at(-1)[0]}`
+        document.getElementById("buddy_lngi8").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 8).at(-1)[0]}`
+        document.getElementById("buddy_lngi9").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 9).at(-1)[0]}`
+        document.getElementById("buddy_lngi10").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 10).at(-1)[0]}`
     }
 
     saveMisc()
