@@ -216,7 +216,7 @@ function saveAllSettings() {
 function saveMisc() {
     const misc = {
         //time based events
-        time: virtualElapsed
+        time: player_time
     }
     localStorage.setItem("lngi_app_misc", JSON.stringify(misc))
 }
