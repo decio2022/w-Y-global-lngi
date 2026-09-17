@@ -281,7 +281,7 @@ function specific_time() {
     if (n != 0) timeOffset = -(Date.now() - st) + get_time_inv(n)
 }
 
-function autovirtualElapsed(){
+function addvirtualElapsed(){
     var n = document.getElementById('virus').value
-    virtualElapsed = n * milestoneMulti
+    virtualElapsed += n * milestoneMulti
 }
