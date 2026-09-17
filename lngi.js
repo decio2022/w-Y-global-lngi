@@ -11,14 +11,38 @@ var lastRealTime = Date.now();
 function loadMisc() {
     try {
         const savedMisc = localStorage.getItem("lngi_app_misc");
-        if (savedMisc) {
-            const misc = JSON.parse(savedMisc);
-            if (typeof misc.time === "number" && !isNaN(misc.time)) {
-                player_time = misc.time;
-            }
+        if (!savedMisc) return;
+        const misc = JSON.parse(savedMisc);
+
+        // Restore the simulated progress (the "time passed" since the start).
+        // This value is what actually drives the main LNGI sequence, so a player
+        // who has reached e.g. "1,3" resumes at "1,3" instead of snapping to "1,1".
+        let restored = null;
+        if (typeof misc.virtualElapsed === "number" && isFinite(misc.virtualElapsed)) {
+            restored = misc.virtualElapsed;
         }
+        // Compatibility: older saves only stored `time` (= virtualElapsed).
+        else if (typeof misc.time === "number" && isFinite(misc.time) && misc.time > 0) {
+            restored = misc.time;
+        }
+
+        // Restore the rest of the time related state.
+        if (typeof misc.timeOffset === "number" && isFinite(misc.timeOffset)) timeOffset = misc.timeOffset;
+        if (typeof misc.milestoneMulti === "number" && isFinite(misc.milestoneMulti)) milestoneMulti = misc.milestoneMulti;
+        if (typeof misc.pause === "number" && isFinite(misc.pause)) pause = misc.pause;
+
+        if (restored !== null) {
+            // Restore the exact saved progress. Reloading must NOT advance the
+            // clock — the player resumes precisely where they stopped.
+            virtualElapsed = restored;
+        }
+
+        // Keep the legacy field in sync with the restored progress.
+        player_time = virtualElapsed;
+        const offsetEl = document.getElementById("input_timeOffset");
+        if (offsetEl) offsetEl.value = String(Math.round(timeOffset / 1000));
     } catch (e) {
-        console.error("Failed to load saved time:", e);
+        console.error("Failed to load saved progress:", e);
     }
 }
 

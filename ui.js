@@ -216,23 +216,22 @@ function saveAllSettings() {
 function saveMisc() {
     const misc = {
         //time based events
-        time: player_time
+        time: player_time,
+        // Save mechanic: persist the full simulated progress so reloading
+        // resumes at the reached LNGI sequence instead of resetting to 1,1.
+        virtualElapsed: virtualElapsed,
+        timeOffset: timeOffset,
+        milestoneMulti: milestoneMulti,
+        pause: pause
     }
     localStorage.setItem("lngi_app_misc", JSON.stringify(misc))
 }
 
-function loadMisc() {
-    const savedData = localStorage.getItem("lngi_app_misc");
-    if (!savedData) return;
-
-    try {
-        const settings = JSON.parse(savedData);
-        player_time = settings.time
-    }
-    catch (e) {
-        console.log("something went wrong when loading misc settings", e)
-    }
-}
+// Note: loadMisc() is defined in lngi.js (loaded after ui.js) and is the single
+// source of truth for restoring saved progress — it runs immediately on page
+// start. The DOMContentLoaded listener below intentionally does NOT call it
+// again: calling it twice would double-count the time that passed while the
+// page was closed.
 
 // Function to load all settings back from localStorage
 function loadAllSettings() {
@@ -347,7 +346,6 @@ btnLoad.onclick = () => {
 // Initialize on page setup
 document.addEventListener("DOMContentLoaded", () => {
     loadAllSettings();
-    loadMisc();
     attachAutoSaveListeners();
 });
 
