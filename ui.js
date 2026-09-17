@@ -222,8 +222,7 @@ function saveMisc() {
         virtualElapsed: virtualElapsed,
         timeOffset: timeOffset,
         milestoneMulti: milestoneMulti,
-        pause: pause,
-        savedAt: Date.now()
+        pause: pause
     }
     localStorage.setItem("lngi_app_misc", JSON.stringify(misc))
 }

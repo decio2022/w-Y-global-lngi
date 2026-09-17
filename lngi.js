@@ -32,12 +32,9 @@ function loadMisc() {
         if (typeof misc.pause === "number" && isFinite(misc.pause)) pause = misc.pause;
 
         if (restored !== null) {
+            // Restore the exact saved progress. Reloading must NOT advance the
+            // clock — the player resumes precisely where they stopped.
             virtualElapsed = restored;
-            // Keep the clock running while the page was closed (offline progression),
-            // but only if the game wasn't paused when it was last saved.
-            if (typeof misc.savedAt === "number" && isFinite(misc.savedAt) && (pause % 2 === 0)) {
-                virtualElapsed += Math.max(0, Date.now() - misc.savedAt);
-            }
         }
 
         // Keep the legacy field in sync with the restored progress.
