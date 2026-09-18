@@ -137,6 +137,49 @@ scratch_bar_init()
 
 var super_list = []
 
+// The sequence is sampled every animation frame, but most samples expand the
+// same w-Y prefixes. Keep the expensive fundamental-sequence expansion and
+// notation conversion in bounded in-memory caches. This is deliberately a
+// RAM cache (rather than localStorage): values can be huge and are cheap to
+// discard between page visits.
+const FS_CACHE_LIMIT = 512;
+const NOTATION_CACHE_LIMIT = 256;
+const fsCache = new Map();
+const notationCache = new Map();
+let fsCacheHits = 0;
+let notationCacheHits = 0;
+
+function cachedFS(ord, exp) {
+    const key = ord + "|" + exp;
+    if (fsCache.has(key)) {
+        fsCacheHits++;
+        const value = fsCache.get(key);
+        fsCache.delete(key); fsCache.set(key, value); // LRU refresh
+        return value;
+    }
+    const value = Y_Sequence.fs(ord, exp);
+    fsCache.set(key, value);
+    if (fsCache.size > FS_CACHE_LIMIT) fsCache.delete(fsCache.keys().next().value);
+    return value;
+}
+
+function cachedNotation(ord, notation) {
+    // Conversion output depends on these controls as well as the notation.
+    const terms = document.getElementById("BMS_Terms");
+    const key = notation + "|" + ord + "|" + (terms ? terms.value : "") +
+        "|" + (typeof compress_BMS !== "undefined" && compress_BMS.checked) +
+        "|" + (typeof format_cOCF !== "undefined" && format_cOCF.checked);
+    if (notationCache.has(key)) {
+        notationCacheHits++;
+        const value = notationCache.get(key);
+        notationCache.delete(key); notationCache.set(key, value);
+        return value;
+    }
+    const value = convert_From_wY(ord, notation);
+    notationCache.set(key, value);
+    if (notationCache.size > NOTATION_CACHE_LIMIT) notationCache.delete(notationCache.keys().next().value);
+    return value;
+}
 
 function ntl(m) {
     super_list = []
@@ -154,7 +197,7 @@ function ntl(m) {
             m = m * 2
             exp = exp + 1
         }
-        var base = Y_Sequence.fs(ord, exp).split(",")
+        var base = cachedFS(ord, exp).split(",")
         var ordl = ord.split(",").length
         ord = base.slice(0, ordl + exp - 1).join(",")
         m = m - 1
@@ -322,10 +365,14 @@ function update() {
                     txt = "<i>" + u[2] + "</i>";
                     break;
                 default:
-                    txt = convert_From_wY(u[2], panel.notation);
+                    txt = cachedNotation(u[2], panel.notation);
                     break;
             }
-            panel.element.innerHTML = txt;
+            // Avoid reparsing identical (often very large) HTML every frame.
+            if (panel.lastRendered !== txt) {
+                panel.element.innerHTML = txt;
+                panel.lastRendered = txt;
+            }
         })
     };
     const modifiedElapsedSeconds = Math.max(0, (virtualElapsed + timeOffset) / 1000);
