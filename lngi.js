@@ -105,6 +105,23 @@ function scratch_bar_init() {
 
 var lt = 0
 function update_scratch_bars(x, currentSimulatedTime) {
+    // The main progress bar only needs the last countdown value.  Do not
+    // rebuild all 53 scratch rows when the user is watching the analysis
+    // page; that work is only useful while the progress page is visible.
+    if (page != 1) {
+        var lastIndex = super_list.length - 1
+        if (lastIndex < 0) {
+            lt = 0
+            return
+        }
+        var last = super_list[lastIndex]
+        var lastU = x + last[2] / (2 ** last[1] / 2)
+        if (lastIndex == 0) lastU = Math.ceil(x)
+        var lastTime = get_time_inv(lastU)
+        lt = Math.max(0, ((lastTime + st) - currentSimulatedTime) / 1000)
+        return
+    }
+
     for (var i = 0; i < 53; i++) {
         if (i < super_list.length) {
             var u = x + super_list[i][2] / (2 ** super_list[i][1] / 2)
@@ -137,49 +154,223 @@ scratch_bar_init()
 
 var super_list = []
 
+/*
+ * w-Y results are discrete for long stretches of the clock, while the
+ * animation calls num_to_lngi on every frame.  Keep the useful part of that
+ * work in bounded, inspectable lists:
+ *
+ *   wYResultCache:       [get_time(), sequence]
+ *   wYExpansionCache:    [source sequence, exponent, expanded sequence]
+ *
+ * For example, the first list can contain [2, "1,1"], [2.5, "1,1,1"].
+ * The actual entries are discovered while the clock runs; the examples are
+ * the shape of the data, not hard-coded progress.  An expansion entry lets
+ * later frames start with the already expanded sequence instead of invoking
+ * Y_Sequence.fs for the same source and exponent again.
+ */
+var wYResultCache = []
+var wYResultCacheLimit = 2048
+var wYResultCacheNext = 0
+var wYLastCachedSequence = null
+var wYExpansionCache = []
+var wYExpansionCacheLookup = new Map()
+var wYExpansionCacheLimit = 4096
+var wYExpansionCacheNext = 0
+var wYLastInput = NaN
+var wYLastResult = null
+var wYLastSuperList = null
+var wYCheckpointCache = [] // [floor, qMin, qMax, ordinal, steps, scale, offset, path]
+var wYCheckpointCacheLimit = 4096
+var wYCheckpointCacheNext = 0
+var wYLastCheckpointPath = []
+
+function findCachedWYCheckpoint(floor, q) {
+    var best = null
+
+    // Most frames are close to the previous frame, so check that path first.
+    for (var i = wYLastCheckpointPath.length - 1; i >= 0; i--) {
+        var candidate = wYLastCheckpointPath[i]
+        if (candidate[0] == floor && q > candidate[1] && q <= candidate[2]) {
+            if (!best || candidate[4] > best[4]) best = candidate
+        }
+    }
+    if (best) return best
+
+    // A seek can move away from the previous path.  Reuse a checkpoint from
+    // an earlier path in that case.
+    for (var i = wYCheckpointCache.length - 1; i >= 0; i--) {
+        var candidate = wYCheckpointCache[i]
+        if (candidate[0] == floor && q > candidate[1] && q <= candidate[2]) {
+            if (!best || candidate[4] > best[4]) best = candidate
+        }
+    }
+    return best
+}
+
+function rememberWYCheckpoint(floor, qMin, qMax, ord, steps, scale, offset, path, runPath) {
+    var entry = [floor, qMin, qMax, ord, steps, scale, offset, path]
+    if (wYCheckpointCache.length < wYCheckpointCacheLimit) {
+        wYCheckpointCache.push(entry)
+    } else {
+        wYCheckpointCache[wYCheckpointCacheNext] = entry
+        wYCheckpointCacheNext = (wYCheckpointCacheNext + 1) % wYCheckpointCacheLimit
+    }
+    runPath.push(entry)
+    return entry
+}
+
+function getCachedWYExpansion(ord, exp) {
+    var key = ord + "\u001f" + exp
+    if (wYExpansionCacheLookup.has(key)) {
+        return wYExpansionCacheLookup.get(key)
+    }
+
+    // This is the only place ntl asks for a fresh fast-sequence expansion.
+    var base = Y_Sequence.fs(ord, exp).split(",")
+    var ordl = ord.split(",").length
+    var expanded = base.slice(0, ordl + exp - 1).join(",")
+
+    var entry = [ord, exp, expanded]
+    if (wYExpansionCache.length < wYExpansionCacheLimit) {
+        wYExpansionCache.push(entry)
+    } else {
+        var expired = wYExpansionCache[wYExpansionCacheNext]
+        wYExpansionCacheLookup.delete(expired[0] + "\u001f" + expired[1])
+        wYExpansionCache[wYExpansionCacheNext] = entry
+        wYExpansionCacheNext = (wYExpansionCacheNext + 1) % wYExpansionCacheLimit
+    }
+    wYExpansionCacheLookup.set(key, expanded)
+    return expanded
+}
+
+function rememberWYResult(timeValue, result) {
+    if (!Number.isFinite(timeValue) || !result || typeof result[0] != "string") return
+
+    // Store sequence transitions rather than 60 identical copies per second.
+    if (wYLastCachedSequence == result[0]) return
+    var entry = [timeValue, result[0]]
+    if (wYResultCache.length < wYResultCacheLimit) {
+        wYResultCache.push(entry)
+    } else {
+        wYResultCache[wYResultCacheNext] = entry
+        wYResultCacheNext = (wYResultCacheNext + 1) % wYResultCacheLimit
+    }
+    wYLastCachedSequence = result[0]
+}
 
 function ntl(m) {
-    super_list = []
-    var ord = `1,${Math.max(1, Math.floor(m))}`
+    var floor = Math.max(1, Math.floor(m))
+    var ord = `1,${floor}`
     var steps = 0
-    var m = 1 - (m % 1)
+    var q = 1 - (m % 1)
+    var current = q
+    var scale = 1
+    var offset = 0
+    var exp = 0
+    var path = [[ord, 0, 1, 0]]
+    var runPath = []
+    var checkpoint = findCachedWYCheckpoint(floor, q)
+
+    if (checkpoint) {
+        // Every previous expansion is affine in the initial q.  Recalculate
+        // only the residual for this q and resume with the cached ordinal.
+        ord = checkpoint[3]
+        steps = checkpoint[4]
+        scale = checkpoint[5]
+        offset = checkpoint[6]
+        current = scale * q + offset
+        path = checkpoint[7]
+        runPath.push(checkpoint)
+    }
+
+    super_list = path.map(function (state) {
+        return [state[0], state[1], state[2] * q + state[3]]
+    })
+    var stateIsListed = true
+
     while (ord.length < 100 && ord.split(",").at(-1) < 1e8 && steps < 53) {
-        super_list = super_list.concat([[ord, steps, m]])
-        if (m <= 1e-14) {
+        // A resumed path already contains this state.  For a fresh path it
+        // was installed above as the root state.  States produced by the
+        // previous iteration are added only after this loop's bounds check,
+        // just like the original implementation.
+        if (!stateIsListed) {
+            super_list.push([ord, steps, current])
+            stateIsListed = true
+        }
+        var beforeMin = checkpoint ? checkpoint[1] : 0
+        var beforeMax = checkpoint ? checkpoint[2] : 1
+        if (current <= 1e-14) {
             break
         }
-        var exp = 0
-        while (m <= 1) {
+
+        exp = 0
+        while (current <= 1) {
             steps = steps + 1
-            m = m * 2
+            current = current * 2
             exp = exp + 1
         }
-        var base = Y_Sequence.fs(ord, exp).split(",")
-        var ordl = ord.split(",").length
-        ord = base.slice(0, ordl + exp - 1).join(",")
-        m = m - 1
+
+        var factor = 2 ** exp
+        var previousScale = scale
+        var previousOffset = offset
+        // Keep an affine form of the residual so future frames can resume
+        // from this point without replaying any earlier fs operations.
+        scale = previousScale * factor
+        offset = previousOffset * factor - 1
+        ord = getCachedWYExpansion(ord, exp)
+        current = current - 1
+
         if (ord.split(",").at(-1) == 1) {
             ord = ord.split(",");
             ord.pop();
             ord = ord.join(",");
 
-            super_list.push([ord, steps, m]);
+            super_list.push([ord, steps, current]);
 
             steps = 69
             break;
         }
+
+        // The exponent is selected by 2^-exp < current_before <=
+        // 2^-(exp-1).  Convert that interval back to the initial q and keep
+        // it with the resulting ordinal as a reusable expansion checkpoint.
+        var qMin = Math.max(beforeMin, (1 / factor - previousOffset) / previousScale)
+        var qMax = Math.min(beforeMax, (1 / (factor / 2) - previousOffset) / previousScale)
+        stateIsListed = false
+
+        // Do not retain a checkpoint for a state that the original loop would
+        // never visit because one of its bounds has already been reached.
+        if (ord.length < 100 && ord.split(",").at(-1) < 1e8 && steps < 53) {
+            path = path.concat([[ord, steps, scale, offset]])
+            checkpoint = rememberWYCheckpoint(floor, qMin, qMax, ord, steps, scale, offset, path, runPath)
+        }
     }
+    wYLastCheckpointPath = runPath
+
     if (steps == 53) {
         ord = ord.split(",");
         ord.pop();
         ord = ord.join(",");
     }
-    return [ord, m, exp]
+    return [ord, current, exp]
 }
 
 function num_to_lngi(m) {
-    var m = m - m % 1 + 0.5 + 0.5 * (m % 1)
-    return ntl(m)
+    // When paused, get_time() is identical on every frame.  Restore the
+    // matching super-list as well as the result so the progress bars remain
+    // correct without even walking the expansion loop.
+    if (m === wYLastInput && wYLastResult) {
+        super_list = wYLastSuperList
+        return wYLastResult
+    }
+
+    var transformed = m - m % 1 + 0.5 + 0.5 * (m % 1)
+    var result = ntl(transformed)
+    wYLastInput = m
+    wYLastResult = result
+    wYLastSuperList = super_list
+    rememberWYResult(m, result)
+    return result
 }
 
 function get_time(t) {
@@ -295,6 +486,12 @@ function num_time(t,update_main_bar=true) {
 
 var tps = 0
 var last_tick = Date.now()
+// localStorage.setItem is synchronous. Saving on every animation frame makes
+// the notation renderer compete with the browser for the main thread.
+var lastMiscSave = 0
+window.addEventListener("pagehide", function () {
+    saveMisc()
+})
 let sync_mountain = document.getElementById("_UPDATEMODE")
 let MaxYTerms = document.getElementById("MaxTerms")
 
@@ -325,7 +522,13 @@ function update() {
                     txt = convert_From_wY(u[2], panel.notation);
                     break;
             }
-            panel.element.innerHTML = txt;
+            // Conversions are cached, but parsing the same (often very large)
+            // OCF string into innerHTML is still expensive.  Only touch the
+            // DOM when the rendered notation actually changes.
+            if (panel.lastRenderedText !== txt) {
+                panel.element.innerHTML = txt;
+                panel.lastRenderedText = txt;
+            }
         })
     };
     const modifiedElapsedSeconds = Math.max(0, (virtualElapsed + timeOffset) / 1000);
@@ -359,6 +562,11 @@ function update() {
         document.getElementById("buddy_lngi10").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 10).at(-1)[0]}`
     }
 
-    saveMisc()
+    // Persist often enough to survive a close, but never synchronously write
+    // localStorage on every frame.
+    if (now - lastMiscSave >= 1000) {
+        saveMisc()
+        lastMiscSave = now
+    }
     requestAnimationFrame(update);
 }

@@ -656,6 +656,47 @@ class Y_Sequence {
    }
 }
 
+/*
+ * Y_Sequence.fs is the expensive part of the w-Y clock.  It is pure for
+ * a given sequence and exponent, so memoize it once for every consumer
+ * (the LNGI clock, the search tool, and future notation viewers).
+ *
+ * The array is intentionally kept as well as the Map: it makes the cache
+ * inspectable and keeps a bounded FIFO of recent results.  The Map makes
+ * lookup constant time, so the cache itself does not become the bottleneck.
+ */
+var ySequenceFsCache = []; // [sequence key, exponent, expanded result]
+var ySequenceFsCacheLookup = new Map();
+var ySequenceFsCacheLimit = 2048;
+var ySequenceFsCacheNext = 0;
+
+(function installYSequenceFsCache() {
+    const uncachedFs = Y_Sequence.fs;
+
+    Y_Sequence.fs = function (sequence, exponent) {
+        const sequenceKey = typeof sequence === "string"
+            ? "string:" + sequence
+            : "value:" + JSON.stringify(sequence);
+        const key = sequenceKey + "\u001f" + String(exponent);
+        if (ySequenceFsCacheLookup.has(key)) {
+            return ySequenceFsCacheLookup.get(key);
+        }
+
+        const result = uncachedFs.call(Y_Sequence, sequence, exponent);
+        const entry = [key, exponent, result];
+        if (ySequenceFsCache.length < ySequenceFsCacheLimit) {
+            ySequenceFsCache.push(entry);
+        } else {
+            const expired = ySequenceFsCache[ySequenceFsCacheNext];
+            ySequenceFsCacheLookup.delete(expired[0]);
+            ySequenceFsCache[ySequenceFsCacheNext] = entry;
+            ySequenceFsCacheNext = (ySequenceFsCacheNext + 1) % ySequenceFsCacheLimit;
+        }
+        ySequenceFsCacheLookup.set(key, result);
+        return result;
+    };
+})();
+
 let Lim_BMS_in_Yseq = '1,3' // Lim(BMS) is 1,3 in y
 
 /*
@@ -1072,7 +1113,6 @@ function Conv_BMS_OCF(matrix) {
     // FROM COCF PROGRAM
 
     function paren(x, n) {
-        console.log()
         let q = x[n] == '(' ? 1 : -1;
         let i = n;
         let t = 0;
@@ -1081,30 +1121,25 @@ function Conv_BMS_OCF(matrix) {
     }
 
     function firstTerm(x) {
-        console.log()
         let m = paren(x, 1);
         return [x.slice(0, m + 1), x.slice(m + 2) || '0'];
     }
 
     function lastTerm(x) {
-        console.log()
         let m = paren(x, x.length - 1);
         return [x.slice(0, m - 2) || '0', x.slice(m - 1)];
     }
 
     function terms(x) {
-        console.log()
         if (x == '0') { return []; }
         return [firstTerm(x)[0]].concat(terms(firstTerm(x)[1]));
     }
 
     function arg(x) {
-        console.log()
         return firstTerm(x)[0].slice(2, -1);
     }
 
     function lt(x, y) {
-        console.log()
         if (y == '0') { return false; }
         if (x == '0') { return true; }
         if (x[0] == 'p' && y[0] == 'P') { return true; }
@@ -8740,7 +8775,69 @@ Pipeline : BMS <-> PMS <-> AMS -> 0Y
 */
 let Y_Terms = document.getElementById("Y_Terms");
 let BMS_Terms = document.getElementById("BMS_Terms");
+/*
+ * Conversion results are requested once per animation frame for every
+ * analysis panel (and sometimes for every progress-bar row).  The input
+ * ordinal usually stays the same for many frames, so doing the complete
+ * w-Y -> OCF conversion again is wasted work.  Keep a small bounded cache
+ * here rather than making each caller know how to memoize conversions.
+ */
+var notationResultCache = []; // [key, rendered result]
+var notationResultCacheLookup = new Map();
+var notationResultCacheLimit = 512;
+var notationResultCacheNext = 0;
+
+function notationCacheKey(ord, mode) {
+    const yTerms = typeof Y_Terms == "undefined" ? "" : Y_Terms.valueAsNumber;
+    const bmsTerms = typeof BMS_Terms == "undefined" ? "" : BMS_Terms.valueAsNumber;
+    const compressed = typeof compress_BMS == "undefined" ? "" : compress_BMS.checked;
+    const formatted = typeof format_cOCF == "undefined" ? "" : format_cOCF.checked;
+    const rawOrdinal = String(ord);
+    // The converter trims the w-Y input before doing any OCF work.  Use that
+    // same prefix as the key so changing an invisible tail does not cause a
+    // large conversion to be repeated.
+    const normalizedOrdinal = typeof trimStringList == "function" && Number.isFinite(yTerms)
+        ? trimStringList(rawOrdinal, yTerms)
+        : rawOrdinal;
+    // Include every setting used by convert_From_wY.  A setting change
+    // therefore cannot return a result rendered with an old setting.
+    return [normalizedOrdinal, String(mode), yTerms, bmsTerms, compressed, formatted].join("\u001f");
+}
+
+function getNotationCache(key) {
+    return notationResultCacheLookup.has(key)
+        ? notationResultCacheLookup.get(key)
+        : undefined;
+}
+
+function setNotationCache(key, value) {
+    if (notationResultCacheLookup.has(key)) return;
+
+    const entry = [key, value];
+    if (notationResultCache.length < notationResultCacheLimit) {
+        notationResultCache.push(entry);
+    } else {
+        const expired = notationResultCache[notationResultCacheNext];
+        notationResultCacheLookup.delete(expired[0]);
+        notationResultCache[notationResultCacheNext] = entry;
+        notationResultCacheNext = (notationResultCacheNext + 1) % notationResultCacheLimit;
+    }
+    notationResultCacheLookup.set(key, value);
+}
+
 function convert_From_wY(ord, mode) {
+    const key = notationCacheKey(ord, mode);
+    const cached = getNotationCache(key);
+    if (cached !== undefined) return cached;
+
+    const result = convert_From_wY_uncached(ord, mode);
+    // All current notation renderers return strings.  Do not cache an
+    // undefined/error result: a later call should still be able to retry.
+    if (typeof result === "string") setNotationCache(key, result);
+    return result;
+}
+
+function convert_From_wY_uncached(ord, mode) {
     ord = trimStringList(ord, Y_Terms.valueAsNumber);
 
     if (mode == "wY") {
