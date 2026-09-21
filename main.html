@@ -29,6 +29,7 @@
                 <button id="btn_milestone" hidden>Milestone</button>
                 <button id="mountain_btn" hidden>Visualizer</button>
                 <button id="btn_buddy">Buddy</button>
+                <button id="btn_highest">Highest terms</button>
                 <button id="settings_btn">Settings</button>
             </div>
         </div>
@@ -291,6 +292,18 @@
         </div>
     </div>
 
+    <div id="highest_terms" class="card" style="display: none; height: 600px; overflow-y: auto;">
+        <div class="highest-intro">
+            Highest value ever reached by each term of the &omega;-Y sequence.<br>
+            Term 1 is always 1 (it can never grow), so it is not tracked. A record is kept
+            even when the sequence drops back down, until that term grows past it again.
+            Sending the clock backwards with the Time Control drops the records of terms
+            the rewound-to sequence can no longer reach; terms still present keep theirs.
+        </div>
+        <div class="highest-summary">Terms with a record: <span id="highest_terms_count">0 / 25</span></div>
+        <div id="highest_terms_container"></div>
+    </div>
+
 
     <div id="settings_modal" class="modal">
         <div class="modal-content">
@@ -355,6 +368,7 @@
 </script>
 <script src="proxy.js" type="module"></script>
 <script src="ui.js"></script>
+<script src="highest.js"></script>
 <script src="conv.js"></script>
 <script src="search.js"></script>
 <script src="lngi.js"></script>
