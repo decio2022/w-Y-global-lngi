@@ -298,6 +298,12 @@ var last_tick = Date.now()
 let sync_mountain = document.getElementById("_UPDATEMODE")
 let MaxYTerms = document.getElementById("MaxTerms")
 
+document.addEventListener("click",cliques)
+
+function cliques(){
+    pause += 1
+}
+
 function update() {
     var now = Date.now();
     tps = 1000 / (now - last_tick);
