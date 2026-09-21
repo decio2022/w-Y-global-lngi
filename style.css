@@ -509,6 +509,7 @@ h2 {
 .analysis-content {
     font-size: calc(var(--font-size) * 1.35);
     margin-top: 10px;
+    cursor: pointer;
 }
 
 #mountain {

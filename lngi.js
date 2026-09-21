@@ -237,6 +237,7 @@ function renderAnalysisPanels() {
         card.querySelector(".notation").value = panel.notation;
 
         panel.element = card.querySelector(".analysis-content");
+        panel.element.title = "Click to pause / resume";
 
         // Action Handlers
         card.querySelector(".remove").onclick = () => {
@@ -300,9 +301,9 @@ let MaxYTerms = document.getElementById("MaxTerms")
 
 // --- Click-to-pause (improved) ---
 // Clicking pauses/resumes the clock, EXCEPT on interactive UI (tabs, buttons,
-// inputs, panels, dialogs, ...). Tab-page content is excluded too: the main
-// display (sequence card, progress bar, top cards) and empty background stay
-// clickable for pause, so using any control never pauses by accident.
+// inputs, panels, dialogs, ...). The main display (sequence card, progress
+// bar, top cards), empty background, and analysis panels stay clickable for
+// pause, so using any control never pauses by accident.
 // This also fixes the old double-toggle bug where e.g. the Pause/Continue
 // button fired both its own `pause+=1` AND the document click handler.
 const PAUSE_CLICK_IGNORE_SELECTOR = [
@@ -324,8 +325,13 @@ const PAUSE_CLICK_IGNORE_SELECTOR = [
     "audio",
     "[contenteditable]",
     ".resize-handle",
-    // Tab-page contents: controls and selectable text live here.
-    "#future-milestone",
+    // Virtual Elapsed controls (NOT the analysis panels themselves: clicking
+    // an analysis panel's content toggles pause, only its header controls
+    // — Remove/Width/Notation — and the toolbar/time panel are exempt).
+    ".time-control-panel",
+    ".analysis-toolbar",
+    ".analysis-header",
+    // Other tab-page contents: controls and selectable text live here.
     "#mountain",
     "#milestone_header",
     "#scratch_bars",
