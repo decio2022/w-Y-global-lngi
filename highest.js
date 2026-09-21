@@ -7,9 +7,9 @@ grow — so it is not tracked; the records cover terms 2 .. 1 + HIGHEST_TERMS_TR
 
 A record only ever goes up while time moves forward: when a term drops back down
 the saved high is kept until the term grows past it again. The one exception is
-the Time Control panel — jumping back in time drops the records earned after the
-moment jumped to, because those terms are no longer reachable. Records are stored
-in localStorage, so they survive a reload.
+the Time Control panel — jumping back in time drops the records of the terms the
+sequence can no longer reach, while terms still present keep theirs. Records are
+stored in localStorage, so they survive a reload.
 
 Terms are kept as decimal strings because a single term can outgrow Number's
 exact integer range; comparisons go through BigInt when both sides are integers.
@@ -30,6 +30,9 @@ var highestTermsRendered = new Array(HIGHEST_TERMS_TRACKED).fill(null);
 // Simulated elapsed time (virtualElapsed + timeOffset) seen on the previous
 // frame, used to notice when the player rewinds time with the Time Control.
 var highestTermsLastTime = null;
+// Set when a rewind is noticed; the next tracked sequence decides which terms it
+// can still reach, and the records past that point are dropped.
+var highestTermsResetPending = false;
 
 function compare_highest_terms(a, b) {
     try {
@@ -73,22 +76,18 @@ function save_highest_terms() {
 }
 
 // The Time Control panel can send the clock backwards ("Go to", a negative Add,
-// or a specific ordinal). Anything recorded after the moment we jumped back to
-// belongs to a future that no longer exists, so those records are dropped — the
-// tracker then re-derives them from the sequence now on screen, and they climb
-// back as the player moves forward again.
+// or a specific ordinal). Terms the rewound-to sequence can no longer reach had
+// their records earned in a future that no longer exists, so those records are
+// dropped. Terms the sequence still reaches keep theirs — a record is only ever
+// beaten by a bigger value, never by travelling in time.
 //
-// This is deliberately keyed on time moving backwards and NOT on "the term is
-// missing from the current sequence": the sequence length swings around during
-// perfectly normal forward play (e.g. 3 terms at day 10, 30 at day 12, 20 at
-// day 13), so missing terms must not clear a record on their own.
+// Which terms are unreachable cannot be known until the next sequence is seen,
+// so the rewind only sets a flag and track_highest_terms does the clearing.
 function highest_terms_check_rewind(simulatedElapsed) {
     if (typeof simulatedElapsed !== "number" || !isFinite(simulatedElapsed)) return;
 
     if (highestTermsLastTime !== null && simulatedElapsed < highestTermsLastTime) {
-        highestTerms = new Array(HIGHEST_TERMS_TRACKED).fill(null);
-        highestTermsRendered = new Array(HIGHEST_TERMS_TRACKED).fill(null);
-        save_highest_terms();
+        highestTermsResetPending = true;
     }
     highestTermsLastTime = simulatedElapsed;
 }
@@ -100,9 +99,27 @@ function highest_terms_check_rewind(simulatedElapsed) {
 // on screen.
 function track_highest_terms(seq) {
     highestTermsNow = new Array(HIGHEST_TERMS_TRACKED).fill(null);
-    if (typeof seq !== "string" || seq.length === 0) return;
 
-    const terms = seq.split(",");
+    const terms = (typeof seq === "string" && seq.length > 0) ? seq.split(",") : [];
+
+    // A rewind happened since the last frame: drop the records of the terms this
+    // sequence cannot reach (index 0 is term 2, so a sequence of N terms reaches
+    // tracked indices 0 .. N-2).
+    if (highestTermsResetPending) {
+        highestTermsResetPending = false;
+        const reachable = Math.max(0, terms.length - 1);
+        let cleared = false;
+        for (let i = reachable; i < HIGHEST_TERMS_TRACKED; i++) {
+            if (highestTerms[i] !== null) {
+                highestTerms[i] = null;
+                highestTermsRendered[i] = null;
+                cleared = true;
+            }
+        }
+        if (cleared) save_highest_terms();
+    }
+
+    if (terms.length === 0) return;
     let changed = false;
 
     // Start at index 1: term 1 is always 1 and is never shown.
