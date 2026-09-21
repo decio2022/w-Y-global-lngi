@@ -310,6 +310,9 @@ function update() {
     //player_time = simulatedTime
 
     document.getElementById("main_lngi_Content").innerHTML = `<i>${u[2]}</i>`
+    // Feed the displayed sequence to the Highest terms tracker (runs on every
+    // tab, so records are kept even while the tab is closed).
+    if (Array.isArray(u)) track_highest_terms(u[2])
     document.getElementById("main_lngi_bar").innerHTML = `${u[0]} to next ordinal (${u[1]} left)`
     document.getElementById("tps").innerHTML = `${tps.toFixed(1)} tps`
     document.getElementById("milestoneMulti").innerHTML = `Time speed: ${milestoneMulti}`
@@ -357,6 +360,10 @@ function update() {
         document.getElementById("buddy_lngi8").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 8).at(-1)[0]}`
         document.getElementById("buddy_lngi9").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 9).at(-1)[0]}`
         document.getElementById("buddy_lngi10").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 10).at(-1)[0]}`
+    }
+
+    if (page == 6) {
+        render_highest_terms()
     }
 
     saveMisc()
