@@ -85,6 +85,26 @@ h2 {
     flex: 0.5;
     min-width: 120px;
     display: flex;
+    cursor: pointer;
+}
+
+/* Click-to-pause indicator: the clock is paused, highlight where to resume. */
+#tps.paused {
+    background: #ffb3b3;
+    font-weight: bold;
+}
+
+#main_lngi.paused {
+    outline: 2px dashed #c00;
+    outline-offset: -2px;
+}
+
+/* Main display areas toggle pause on click — hint that with a pointer. */
+#main_lngi,
+#main_lngi_bar,
+#time,
+#milestoneMulti {
+    cursor: pointer;
 }
 
 /* Bars */
