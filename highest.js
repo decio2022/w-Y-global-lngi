@@ -5,9 +5,11 @@ Keeps a record of the biggest value ever reached by each term of the current
 ω-Y sequence (the one shown in the main card). Term 1 is always 1 — it can never
 grow — so it is not tracked; the records cover terms 2 .. 1 + HIGHEST_TERMS_TRACKED.
 
-A record only ever goes up: when a term drops back down (which happens every time
-the sequence restarts from "1,3") the saved high is kept until the term grows
-past it again. Records are stored in localStorage, so they survive a reload.
+A record only ever goes up while time moves forward: when a term drops back down
+the saved high is kept until the term grows past it again. The one exception is
+the Time Control panel — jumping back in time drops the records earned after the
+moment jumped to, because those terms are no longer reachable. Records are stored
+in localStorage, so they survive a reload.
 
 Terms are kept as decimal strings because a single term can outgrow Number's
 exact integer range; comparisons go through BigInt when both sides are integers.
@@ -25,6 +27,9 @@ var highestTermsNow = new Array(HIGHEST_TERMS_TRACKED).fill(null);
 // Last rendered record/current pair per row, so the tab doesn't rewrite the same
 // text 60 times a second.
 var highestTermsRendered = new Array(HIGHEST_TERMS_TRACKED).fill(null);
+// Simulated elapsed time (virtualElapsed + timeOffset) seen on the previous
+// frame, used to notice when the player rewinds time with the Time Control.
+var highestTermsLastTime = null;
 
 function compare_highest_terms(a, b) {
     try {
@@ -67,12 +72,35 @@ function save_highest_terms() {
     }
 }
 
-// Feed the current ω-Y sequence (raw string, e.g. "1,2,4,8,16") to the tracker.
-// Called every frame from update(), whichever tab is open.
-function track_highest_terms(seq) {
-    if (typeof seq !== "string" || seq.length === 0) return;
+// The Time Control panel can send the clock backwards ("Go to", a negative Add,
+// or a specific ordinal). Anything recorded after the moment we jumped back to
+// belongs to a future that no longer exists, so those records are dropped — the
+// tracker then re-derives them from the sequence now on screen, and they climb
+// back as the player moves forward again.
+//
+// This is deliberately keyed on time moving backwards and NOT on "the term is
+// missing from the current sequence": the sequence length swings around during
+// perfectly normal forward play (e.g. 3 terms at day 10, 30 at day 12, 20 at
+// day 13), so missing terms must not clear a record on their own.
+function highest_terms_check_rewind(simulatedElapsed) {
+    if (typeof simulatedElapsed !== "number" || !isFinite(simulatedElapsed)) return;
 
+    if (highestTermsLastTime !== null && simulatedElapsed < highestTermsLastTime) {
+        highestTerms = new Array(HIGHEST_TERMS_TRACKED).fill(null);
+        highestTermsRendered = new Array(HIGHEST_TERMS_TRACKED).fill(null);
+        save_highest_terms();
+    }
+    highestTermsLastTime = simulatedElapsed;
+}
+
+// Feed the current ω-Y sequence (raw string, e.g. "1,2,4,8,16") to the tracker.
+// Called every frame from update(), whichever tab is open. `seq` is null when
+// there is no sequence to show (the clock has not started yet), which still has
+// to clear the "current" column instead of leaving the previous frame's values
+// on screen.
+function track_highest_terms(seq) {
     highestTermsNow = new Array(HIGHEST_TERMS_TRACKED).fill(null);
+    if (typeof seq !== "string" || seq.length === 0) return;
 
     const terms = seq.split(",");
     let changed = false;

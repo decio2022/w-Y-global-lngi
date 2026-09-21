@@ -311,8 +311,11 @@ function update() {
 
     document.getElementById("main_lngi_Content").innerHTML = `<i>${u[2]}</i>`
     // Feed the displayed sequence to the Highest terms tracker (runs on every
-    // tab, so records are kept even while the tab is closed).
-    if (Array.isArray(u)) track_highest_terms(u[2])
+    // tab, so records are kept even while the tab is closed). The rewind check
+    // has to run first: it drops records from a future the player jumped back
+    // out of before the current sequence is tracked again.
+    highest_terms_check_rewind(virtualElapsed + timeOffset)
+    track_highest_terms(Array.isArray(u) ? u[2] : null)
     document.getElementById("main_lngi_bar").innerHTML = `${u[0]} to next ordinal (${u[1]} left)`
     document.getElementById("tps").innerHTML = `${tps.toFixed(1)} tps`
     document.getElementById("milestoneMulti").innerHTML = `Time speed: ${milestoneMulti}`
