@@ -237,6 +237,7 @@ function renderAnalysisPanels() {
         card.querySelector(".notation").value = panel.notation;
 
         panel.element = card.querySelector(".analysis-content");
+        panel.element.title = "Click to pause / resume";
 
         // Action Handlers
         card.querySelector(".remove").onclick = () => {
@@ -298,11 +299,90 @@ var last_tick = Date.now()
 let sync_mountain = document.getElementById("_UPDATEMODE")
 let MaxYTerms = document.getElementById("MaxTerms")
 
-document.addEventListener("click",cliques)
+// --- Click-to-pause (improved) ---
+// Clicking pauses/resumes the clock, EXCEPT on interactive UI (tabs, buttons,
+// inputs, panels, dialogs, ...). The main display (sequence card, progress
+// bar, top cards), empty background, and analysis panels stay clickable for
+// pause, so using any control never pauses by accident.
+// This also fixes the old double-toggle bug where e.g. the Pause/Continue
+// button fired both its own `pause+=1` AND the document click handler.
+const PAUSE_CLICK_IGNORE_SELECTOR = [
+    // Header chrome: title, visitor counter and the tab buttons (+ gaps).
+    ".header",
+    // Settings dialog (including its backdrop).
+    ".modal",
+    // Any interactive element, anywhere on the page.
+    "button",
+    "input",
+    "select",
+    "textarea",
+    "option",
+    "a",
+    "label",
+    "canvas",
+    "img",
+    "video",
+    "audio",
+    "[contenteditable]",
+    ".resize-handle",
+    // Virtual Elapsed controls (NOT the analysis panels themselves: clicking
+    // an analysis panel's content toggles pause, only its header controls
+    // — Remove/Width/Notation — and the toolbar/time panel are exempt).
+    ".time-control-panel",
+    ".analysis-toolbar",
+    ".analysis-header",
+    // Other tab-page contents: controls and selectable text live here.
+    "#mountain",
+    "#milestone_header",
+    "#scratch_bars",
+    "#real_milestones",
+    "#buddy",
+    "#highest_terms"
+].join(",");
 
-function cliques(){
-    pause += 1
+function shouldIgnorePauseClick(e) {
+    const t = e && e.target;
+    if (!t || typeof t.closest !== "function") return false;
+    if (t.closest(PAUSE_CLICK_IGNORE_SELECTOR)) return true;
+    // Dragging to select text shouldn't pause either.
+    try {
+        if (window.getSelection && String(window.getSelection())) return true;
+    } catch (_) { /* ignore */ }
+    return false;
 }
+
+function isPaused() {
+    return pause % 2 === 0;
+}
+
+function togglePause() {
+    pause += 1;
+    updatePauseIndicator();
+}
+
+function updatePauseIndicator() {
+    const paused = isPaused();
+    const tpsEl = document.getElementById("tps");
+    if (tpsEl) tpsEl.classList.toggle("paused", paused);
+    const mainEl = document.getElementById("main_lngi");
+    if (mainEl) mainEl.classList.toggle("paused", paused);
+}
+
+document.addEventListener("click", cliques)
+
+function cliques(e) {
+    if (shouldIgnorePauseClick(e)) return;
+    togglePause();
+}
+
+// Hint that the main display areas toggle pause on click.
+(function markPausableAreas() {
+    ["main_lngi", "main_lngi_bar", "time", "tps", "milestoneMulti"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !el.title) el.title = "Click to pause / resume";
+    });
+    updatePauseIndicator();
+})();
 
 function update() {
     var now = Date.now();
@@ -323,7 +403,8 @@ function update() {
     highest_terms_check_rewind(virtualElapsed + timeOffset)
     track_highest_terms(Array.isArray(u) ? u[2] : null)
     document.getElementById("main_lngi_bar").innerHTML = `${u[0]} to next ordinal (${u[1]} left)`
-    document.getElementById("tps").innerHTML = `${tps.toFixed(1)} tps`
+    updatePauseIndicator();
+    document.getElementById("tps").innerHTML = isPaused() ? `⏸ Paused — click the sequence to resume` : `${tps.toFixed(1)} tps`
     document.getElementById("milestoneMulti").innerHTML = `Time speed: ${milestoneMulti}`
     if (page == 3 && sync_mountain.checked) { document.getElementById("input").value = trimStringList(u[2], MaxYTerms.valueAsNumber) }
     if (page == 2) {
