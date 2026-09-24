@@ -217,16 +217,18 @@ function renderAnalysisPanels() {
                 Notation
                 <select class="notation">
                     <option value="wY">ω-Y</option>
-                    <option value="BMS">BMS</option>
                     <option value="DBMS">DBMS</option>
-                    <option value="2-shifted OCF">2-shifted OCF</option>
-                    <option value="cOCF">cOCF</option>
-                    <option value="EcOCF">Extended cOCF</option>
-                    <option value="BcOCF">Bufed cOCF</option>
-                    <option value="PMS">PMS</option>
-                    <option value="AMS">AMS</option>
-                    <option value="0Y">0-Y</option>
-                    <option value="Vulcaniz">Vulcaniz</option>
+                    <div class="SHO">
+                        <option value="BMS">BMS</option>
+                        <option value="2-shifted OCF">2-shifted OCF</option>
+                        <option value="cOCF">cOCF</option>
+                        <option value="EcOCF">Extended cOCF</option>
+                        <option value="BcOCF">Bufed cOCF</option>
+                        <option value="PMS">PMS</option>
+                        <option value="AMS">AMS</option>
+                        <option value="0Y">0-Y</option>
+                        <option value="Vulcaniz">Vulcaniz</option>
+                    </div>
                 </select>
             </div>
             <div class="analysis-content"></div>
@@ -394,6 +396,13 @@ function update() {
     var simulatedTime = st + virtualElapsed + timeOffset;
     var u = num_time(simulatedTime);
     //player_time = simulatedTime
+
+    if (get_time(simulatedTime - st) > 4) {
+        const q = document.getElementsByClassName("SHO")
+        for (var i in q) {
+            q[i].hidden = true
+        }
+    }
 
     document.getElementById("main_lngi_Content").innerHTML = `<i>${u[2]}</i>`
     // Feed the displayed sequence to the Highest terms tracker (runs on every
