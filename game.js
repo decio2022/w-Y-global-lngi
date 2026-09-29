@@ -114,6 +114,13 @@ const MILESTONES = [
     { v: 9876543210, label: "THE END — every digit exactly once" },
 ];
 
+/* Recursive progress ladder positions: the first valid number of each
+ * digit length, ending at the final number of the whole sequence. */
+const LADDER = [
+    10, 102, 1023, 10234, 102345, 1023456,
+    10234567, 102345678, 1023456789, 9876543210,
+];
+
 /* ---------------------------------------------------------------------
  * State & persistence
  * ------------------------------------------------------------------- */
@@ -170,9 +177,7 @@ const hintText     = $("hint_text");
 const progressText = $("progress_text");
 const progressBar  = $("progress_bar");
 const progressPct  = $("progress_pct");
-const gpText       = $("gp_text");
-const gpBar        = $("gp_bar");
-const gpPct        = $("gp_pct");
+const ladderEl     = $("ladder");
 const streakEl     = $("streak");
 const bestEl       = $("best_streak");
 const speedEl      = $("speed");
@@ -239,21 +244,63 @@ function renderTrail() {
     trailEl.innerHTML = "<bdo>… " + parts.join(" → ") + "</bdo>";
 }
 
+/**
+ * Recursive progress ladder.
+ * First row: the very next number of the sequence (always 1 away —
+ * at the start that's 1; at 2 the next is 3).
+ * Then one row per remaining position: how many sequence numbers are
+ * left to reach 10, 102, 1023, ... up to 9,876,543,210. Each row has
+ * its own bar for its segment, and rows disappear once passed.
+ * e.g. at 2: "next → 3 (1 number)" and "8 numbers to reach 10".
+ */
+function renderLadder(idx) {
+    if (state.done) {
+        ladderEl.innerHTML = '<div class="ladder-done">🏆 9,876,543,210 reached — the ladder is complete!</div>';
+        return;
+    }
+
+    let html = "";
+
+    if (target !== null) {
+        html +=
+            '<div class="ladder-next">' +
+                `<span class="ladder-label">next → <b>${fmt(target)}</b></span>` +
+                '<span class="ladder-count">1 number away</span>' +
+            "</div>";
+    }
+
+    let prev = 0;
+    for (const b of LADDER) {
+        if (b <= state.current) { prev = b; continue; }
+        const segStart = countValidUpTo(prev);
+        const segEnd = countValidUpTo(b);
+        const remaining = segEnd - idx;
+        const segFrac = Math.min(1, Math.max(0, (idx - segStart) / (segEnd - segStart)));
+        const flag = b === MAX_NUMBER ? "🏁 " : "";
+        html +=
+            '<div class="ladder-row">' +
+                '<div class="ladder-top">' +
+                    `<span class="ladder-label">${flag}to reach ${fmt(b)}</span>` +
+                    `<span class="ladder-count">${fmt(remaining)} number${remaining === 1 ? "" : "s"}</span>` +
+                "</div>" +
+                '<div class="bar-container thin">' +
+                    `<div class="bar-fill" style="width:${(segFrac * 100).toFixed(3)}%"></div>` +
+                "</div>" +
+            "</div>";
+        prev = b;
+    }
+
+    ladderEl.innerHTML = html;
+}
+
 function renderStats() {
     const idx = countValidUpTo(state.current);
     const frac = idx / TOTAL_COUNT;
-    const countText = `${fmt(idx)} / ${fmt(TOTAL_COUNT)}`;
-    const widthText = (frac * 100).toFixed(4) + "%";
-    const pctText = (frac * 100).toFixed(5) + "%";
+    progressText.textContent = `${fmt(idx)} / ${fmt(TOTAL_COUNT)}`;
+    progressBar.style.width = (frac * 100).toFixed(4) + "%";
+    progressPct.textContent = (frac * 100).toFixed(5) + "%";
 
-    progressText.textContent = countText;
-    progressBar.style.width = widthText;
-    progressPct.textContent = pctText;
-
-    // same progress, mirrored inside the game card
-    gpText.textContent = countText;
-    gpBar.style.width = widthText;
-    gpPct.textContent = pctText;
+    renderLadder(idx);
 
     streakEl.textContent = fmt(state.streak);
     bestEl.textContent = "best " + fmt(state.best);

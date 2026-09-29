@@ -81,6 +81,57 @@ html, body {
 
 .stat-value.small { font-size: 1.1rem; }
 
+/* --- recursive progress ladder --- */
+
+.ladder-row { margin-top: 8px; }
+
+.ladder-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.ladder-label {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    color: var(--text);
+}
+.ladder-label b { color: var(--accent); }
+
+.ladder-count {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.ladder-next {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 5px 10px;
+    border: 1px solid var(--accent-dim);
+    border-radius: 8px;
+    background: rgba(77, 208, 164, 0.06);
+}
+.ladder-next .ladder-count { color: var(--accent); }
+
+.bar-container.thin {
+    height: 8px;
+    border-radius: 4px;
+    margin-top: 3px;
+}
+.bar-container.thin .bar-fill { border-radius: 4px; }
+
+.ladder-done {
+    font-family: var(--mono);
+    color: var(--accent);
+    font-size: 1rem;
+    margin-top: 6px;
+}
+
 .trail {
     font-family: var(--mono);
     color: var(--muted);
