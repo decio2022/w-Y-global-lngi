@@ -160,6 +160,7 @@ const $ = (id) => document.getElementById(id);
 
 const input        = $("game_input");
 const currentEl    = $("current_number");
+const currentLabelEl = $("current_label");
 const promptEl     = $("prompt_text");
 const feedbackEl   = $("feedback");
 const skipBanner   = $("skip_banner");
@@ -169,6 +170,9 @@ const hintText     = $("hint_text");
 const progressText = $("progress_text");
 const progressBar  = $("progress_bar");
 const progressPct  = $("progress_pct");
+const gpText       = $("gp_text");
+const gpBar        = $("gp_bar");
+const gpPct        = $("gp_pct");
 const streakEl     = $("streak");
 const bestEl       = $("best_streak");
 const speedEl      = $("speed");
@@ -237,10 +241,19 @@ function renderTrail() {
 
 function renderStats() {
     const idx = countValidUpTo(state.current);
-    progressText.textContent = `${fmt(idx)} / ${fmt(TOTAL_COUNT)}`;
     const frac = idx / TOTAL_COUNT;
-    progressBar.style.width = (frac * 100).toFixed(4) + "%";
-    progressPct.textContent = (frac * 100).toFixed(5) + "%";
+    const countText = `${fmt(idx)} / ${fmt(TOTAL_COUNT)}`;
+    const widthText = (frac * 100).toFixed(4) + "%";
+    const pctText = (frac * 100).toFixed(5) + "%";
+
+    progressText.textContent = countText;
+    progressBar.style.width = widthText;
+    progressPct.textContent = pctText;
+
+    // same progress, mirrored inside the game card
+    gpText.textContent = countText;
+    gpBar.style.width = widthText;
+    gpPct.textContent = pctText;
 
     streakEl.textContent = fmt(state.streak);
     bestEl.textContent = "best " + fmt(state.best);
@@ -275,9 +288,11 @@ function renderStats() {
 }
 
 function renderMain() {
-    currentEl.textContent = state.current === 0 ? "START" : fmt(state.current);
-    promptEl.textContent = state.current === 0
-        ? "Type the first number of the sequence"
+    const startFresh = state.current === 0;
+    currentLabelEl.textContent = startFresh ? "STARTING AT" : "LAST NUMBER";
+    currentEl.textContent = startFresh ? "1" : fmt(state.current);
+    promptEl.textContent = startFresh
+        ? "The sequence starts at 1 — type 1 to begin!"
         : "Type the NEXT repeat-free number";
     renderTrail();
     renderStats();
