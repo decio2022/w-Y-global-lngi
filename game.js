@@ -114,12 +114,10 @@ const MILESTONES = [
     { v: 9876543210, label: "THE END — every digit exactly once" },
 ];
 
-/* Recursive progress ladder positions: the first valid number of each
- * digit length, ending at the final number of the whole sequence. */
-const LADDER = [
-    10, 102, 1023, 10234, 102345, 1023456,
-    10234567, 102345678, 1023456789, 9876543210,
-];
+/* Progress ladder: row 0 is the next number; row n tracks the next
+ * multiple of 10^n (10, 100, 1000, ...), recursively re-targeted each
+ * time a multiple is passed. The last row is the end of the sequence. */
+const MAX_POWER = 9; // multiples of 10^1 .. 10^9 fit below 9,876,543,210
 
 /* ---------------------------------------------------------------------
  * State & persistence
@@ -245,13 +243,16 @@ function renderTrail() {
 }
 
 /**
- * Recursive progress ladder.
- * First row: the very next number of the sequence (always 1 away —
- * at the start that's 1; at 2 the next is 3).
- * Then one row per remaining position: how many sequence numbers are
- * left to reach 10, 102, 1023, ... up to 9,876,543,210. Each row has
- * its own bar for its segment, and rows disappear once passed.
- * e.g. at 2: "next → 3 (1 number)" and "8 numbers to reach 10".
+ * Recursive progress ladder, one bar per power of ten.
+ * Row 0: the very next number of the sequence (always 1 away).
+ * Row n: the next multiple of 10^n above the current position —
+ *   at 2 the 10^1 bar targets 10; once past 10 it targets 20, then 30…
+ *   the 10^2 bar targets 100, then 200… and so on, recursively
+ *   re-targeted every time a multiple is passed.
+ * Last row: the end of the whole sequence, 9,876,543,210.
+ * Counts are in sequence numbers (repeat-free ones): "to reach M" means
+ * typing the first valid number >= M (at 98, one keystroke reaches 100+
+ * because 102 comes next).
  */
 function renderLadder(idx, npm) {
     if (state.done) {
@@ -262,6 +263,16 @@ function renderLadder(idx, npm) {
     let html = "";
     let row = 0;
 
+    const barRow = (label, remaining, segFrac) => {
+        const eta = npm > 0 ? ` / ${fmtEta((remaining / npm) * 60000)} left` : "";
+        return (
+            `<div class="wy-bar" style="background-color: hsl(${row * 10},100%,90%); width: ${(segFrac * 100).toFixed(2)}%">` +
+                `${label} ` +
+                `<small>(${(segFrac * 100).toFixed(2)}% / ${fmt(remaining)} number${remaining === 1 ? "" : "s"}${eta})</small>` +
+            "</div>"
+        );
+    };
+
     if (target !== null) {
         html +=
             `<div class="wy-bar" style="background-color: hsl(160,100%,88%); width: 100%">` +
@@ -270,23 +281,20 @@ function renderLadder(idx, npm) {
         row++;
     }
 
-    let prev = 0;
-    for (const b of LADDER) {
-        if (b <= state.current) { prev = b; continue; }
-        const segStart = countValidUpTo(prev);
-        const segEnd = countValidUpTo(b);
-        const remaining = segEnd - idx;
-        const segFrac = Math.min(1, Math.max(0, (idx - segStart) / (segEnd - segStart)));
-        const flag = b === MAX_NUMBER ? "🏁 " : "";
-        const eta = npm > 0 ? ` / ${fmtEta((remaining / npm) * 60000)} left` : "";
-        html +=
-            `<div class="wy-bar" style="background-color: hsl(${row * 10},100%,90%); width: ${(segFrac * 100).toFixed(2)}%">` +
-                `${flag}to reach ${fmt(b)} ` +
-                `<small>(${(segFrac * 100).toFixed(2)}% / ${fmt(remaining)} number${remaining === 1 ? "" : "s"}${eta})</small>` +
-            "</div>";
+    for (let n = 1; n <= MAX_POWER; n++) {
+        const step = Math.pow(10, n);
+        const M = (Math.floor(state.current / step) + 1) * step; // next multiple of 10^n
+        if (M > MAX_NUMBER) continue;
+        const base = countValidUpTo(M - step);       // rank at the previous multiple
+        const end = countValidUpTo(M - 1) + 1;       // rank of the first valid number >= M
+        const remaining = end - idx;
+        const segFrac = Math.min(1, Math.max(0, (idx - base) / (end - base)));
+        html += barRow(`to reach ${fmt(M)}`, remaining, segFrac);
         row++;
-        prev = b;
     }
+
+    // final row: the whole sequence
+    html += barRow(`🏁 to reach ${fmt(MAX_NUMBER)}`, TOTAL_COUNT - idx, idx / TOTAL_COUNT);
 
     ladderEl.innerHTML = html;
 }
