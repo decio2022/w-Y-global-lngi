@@ -81,55 +81,38 @@ html, body {
 
 .stat-value.small { font-size: 1.1rem; }
 
-/* --- recursive progress ladder --- */
+/* --- progress ladder, styled like the w-Y global LNGI scratch bars --- */
 
-.ladder-row { margin-top: 8px; }
-
-.ladder-top {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 10px;
+#ladder {
+    background: #dcdcdc;          /* old #scratch_bars panel */
+    border-radius: 5px;
+    padding: 5px;
+    overflow-x: hidden;
 }
 
-.ladder-label {
-    font-family: var(--mono);
-    font-size: 0.85rem;
-    color: var(--text);
-}
-.ladder-label b { color: var(--accent); }
-
-.ladder-count {
-    font-family: var(--mono);
-    font-size: 0.8rem;
-    color: var(--muted);
+/* each row: the colored bar itself is the progress (width = %), with
+   nowrap text overflowing onto the gray, exactly like the old game */
+.wy-bar {
+    min-height: 24px;             /* old default milestone bar height */
+    line-height: 20px;
+    margin-bottom: 4px;
+    padding: 2px 6px;
+    border-radius: 3px;
     white-space: nowrap;
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    color: #16202c;
+    transition: width 0.25s ease;
 }
-
-.ladder-next {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 5px 10px;
-    border: 1px solid var(--accent-dim);
-    border-radius: 8px;
-    background: rgba(77, 208, 164, 0.06);
-}
-.ladder-next .ladder-count { color: var(--accent); }
-
-.bar-container.thin {
-    height: 8px;
-    border-radius: 4px;
-    margin-top: 3px;
-}
-.bar-container.thin .bar-fill { border-radius: 4px; }
+.wy-bar:last-child { margin-bottom: 0; }
+.wy-bar small { font-size: 80%; color: #37424f; }
 
 .ladder-done {
     font-family: var(--mono);
-    color: var(--accent);
-    font-size: 1rem;
-    margin-top: 6px;
+    color: #166a4e;
+    font-size: 0.95rem;
+    padding: 4px 6px;
 }
 
 .trail {
@@ -298,21 +281,22 @@ html, body {
     font-family: var(--mono);
 }
 
+/* old w-Y LNGI main bar: #bcd fill on #eee track, text inside, nowrap */
 .bar-container {
     margin-top: 8px;
-    height: 14px;
-    border-radius: 7px;
-    background: var(--bg);
-    border: 1px solid var(--card-border);
+    background: #eee;
+    border-radius: 4px;
     overflow: hidden;
 }
 
 .bar-fill {
-    height: 100%;
     width: 0%;
-    min-width: 0;
-    border-radius: 7px;
-    background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+    background: #bcd;
+    padding: 3px 6px;
+    white-space: nowrap;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: #16202c;
     transition: width 0.25s ease;
 }
 

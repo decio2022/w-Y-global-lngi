@@ -253,20 +253,21 @@ function renderTrail() {
  * its own bar for its segment, and rows disappear once passed.
  * e.g. at 2: "next → 3 (1 number)" and "8 numbers to reach 10".
  */
-function renderLadder(idx) {
+function renderLadder(idx, npm) {
     if (state.done) {
         ladderEl.innerHTML = '<div class="ladder-done">🏆 9,876,543,210 reached — the ladder is complete!</div>';
         return;
     }
 
     let html = "";
+    let row = 0;
 
     if (target !== null) {
         html +=
-            '<div class="ladder-next">' +
-                `<span class="ladder-label">next → <b>${fmt(target)}</b></span>` +
-                '<span class="ladder-count">1 number away</span>' +
+            `<div class="wy-bar" style="background-color: hsl(160,100%,88%); width: 100%">` +
+                `next → <b>${fmt(target)}</b> <small>(1 number away)</small>` +
             "</div>";
+        row++;
     }
 
     let prev = 0;
@@ -277,16 +278,13 @@ function renderLadder(idx) {
         const remaining = segEnd - idx;
         const segFrac = Math.min(1, Math.max(0, (idx - segStart) / (segEnd - segStart)));
         const flag = b === MAX_NUMBER ? "🏁 " : "";
+        const eta = npm > 0 ? ` / ${fmtEta((remaining / npm) * 60000)} left` : "";
         html +=
-            '<div class="ladder-row">' +
-                '<div class="ladder-top">' +
-                    `<span class="ladder-label">${flag}to reach ${fmt(b)}</span>` +
-                    `<span class="ladder-count">${fmt(remaining)} number${remaining === 1 ? "" : "s"}</span>` +
-                "</div>" +
-                '<div class="bar-container thin">' +
-                    `<div class="bar-fill" style="width:${(segFrac * 100).toFixed(3)}%"></div>` +
-                "</div>" +
+            `<div class="wy-bar" style="background-color: hsl(${row * 10},100%,90%); width: ${(segFrac * 100).toFixed(2)}%">` +
+                `${flag}to reach ${fmt(b)} ` +
+                `<small>(${(segFrac * 100).toFixed(2)}% / ${fmt(remaining)} number${remaining === 1 ? "" : "s"}${eta})</small>` +
             "</div>";
+        row++;
         prev = b;
     }
 
@@ -296,11 +294,18 @@ function renderLadder(idx) {
 function renderStats() {
     const idx = countValidUpTo(state.current);
     const frac = idx / TOTAL_COUNT;
+
+    // speed over the last 60 s
+    const now = Date.now();
+    hitTimes = hitTimes.filter((t) => now - t <= 60000);
+    const npm = hitTimes.length;
+
     progressText.textContent = `${fmt(idx)} / ${fmt(TOTAL_COUNT)}`;
     progressBar.style.width = (frac * 100).toFixed(4) + "%";
+    progressBar.textContent = (frac * 100).toFixed(5) + "%";
     progressPct.textContent = (frac * 100).toFixed(5) + "%";
 
-    renderLadder(idx);
+    renderLadder(idx, npm);
 
     streakEl.textContent = fmt(state.streak);
     bestEl.textContent = "best " + fmt(state.best);
@@ -308,11 +313,6 @@ function renderStats() {
     hintsEl.textContent = fmt(state.hints) + " hints used";
     skippedEl.textContent = fmt(state.skippedTotal);
     elapsedEl.textContent = fmtDuration(state.elapsedMs);
-
-    // speed over the last 60 s
-    const now = Date.now();
-    hitTimes = hitTimes.filter((t) => now - t <= 60000);
-    const npm = hitTimes.length;
     speedEl.textContent = fmt(npm);
 
     // ETA at current pace
