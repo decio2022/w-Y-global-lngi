@@ -2992,7 +2992,7 @@ function update_milestones() {
     while (N < valid_milestones.length - 1 && valid_milestones[N][4] < ct) {
         N = N+1
     }
-    var T = vt - get_time_inv(valid_milestones[N][4]) - st;
+    var T = vt - get_time_inv(valid_milestones[N][4]);
     document.getElementById("real_milestone_next").innerHTML = `${N}# ${valid_milestones[N][0]} / ${valid_milestones[N][1]}<br>in ${formatSeconds(-T / 1000)}`
 }
 
