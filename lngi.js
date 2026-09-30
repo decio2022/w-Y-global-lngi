@@ -92,15 +92,137 @@ function formatSeconds(totalSeconds) {
     return parts.filter(Boolean).join(' ');
 }
 function scratch_bar_init() {
-    for (var i = 0; i < 53; i++) {
+    for (let i = 0; i < 53; i++) {
         const p = document.createElement("div")
         p.style.height = "6.25%";
         p.style.position = "absolute";
         p.style.top = `${i * 6.25}%`
         p.id = `bar_${i}`
         p.style.textWrap = `nowrap`
+        p.title = "Click to jump to this sequence"
+        p.addEventListener("click", () => jump_to_scratch_bar(i))
         document.getElementById("scratch_content").appendChild(p)
     }
+}
+
+// --- Jumping to a scratch bar's sequence ------------------------------------
+// Every scratch bar is one step of the expansion chain that `ntl` walks through
+// for the current u value (see num_to_lngi): entry i is [ord, steps, m], i.e.
+// "after `steps` halvings the chain sits on `ord`, with leftover fraction m".
+// The main sequence is that chain with its last term popped off.
+//
+// To turn bar i's sequence into the *main* sequence, the chain has to be rebuilt
+// so that it stops on an ordinal one term longer and then counts that extra term
+// down to 1 — reaching 1 is what pops back onto the bar's own sequence. The
+// jump that produced this bar has to take one more step than it did, which
+// leaves a fraction of exactly 1 right before it, and undoing the chain from
+// there gives the fraction the chain has to start from:
+//
+//   * the jump needs exponent E = e_i + 1 (one more than the step that produced
+//     this bar), so it leaves m = 2^(1-E) = 2 right before it,
+//   * undoing the earlier jumps with m_prev = (m + 1) / 2^e walks the fraction
+//     back to the start, and u = floor(u) + 1 - 2 * m_start maps it to a time.
+//
+// The first bar is the base "1,k" of the current interval, which is the main
+// sequence of the *next* interval (the chain there pops back onto it), so it
+// jumps to floor(u)+1.
+function scratch_bar_jump_target(i) {
+    var u_now = get_time(Math.max(0, virtualElapsed + timeOffset))
+    var main_now = num_to_lngi(u_now)[0]        // make sure super_list is fresh
+    var n = super_list.length - 1
+    if (i < 0 || i > n) return null
+    // What the bar shows. The last bar of a chain that stopped by counting a
+    // term down to 1 already *is* the popped main sequence, so there is nothing
+    // further to jump to for it.
+    var shown = super_list[i][0]
+    if (i == n && main_now == shown) return { u: u_now, shown: shown, u_now: u_now }
+    var u_target
+    if (i == 0) {
+        u_target = Math.floor(u_now) + 1
+    } else {
+        // The jump that produced this bar has to take one more step, so it
+        // leaves a fraction of exactly 1 and every step after it is a plain
+        // count down: the extra term reaches 1, which pops back onto the bar's
+        // own sequence. Undoing the chain from that gives the fraction the
+        // chain has to start from, and u = floor(u) + 1 - 2 * m_start maps it
+        // to a time.
+        var m = Math.pow(2, 1 - (super_list[i][1] - super_list[i - 1][1] + 1))
+        for (var j = i - 1; j >= 1; j--) {
+            m = (m + 1) / Math.pow(2, super_list[j][1] - super_list[j - 1][1])
+        }
+        u_target = Math.floor(u_now) + 1 - 2 * m
+    }
+    return { u: u_target, shown: shown, u_now: u_now }
+}
+
+// How many leading terms two sequences share, used to judge how close a
+// reachable sequence is to the one that was clicked.
+function scratch_common_terms(a, b) {
+    var x = a.split(","), y = b.split(","), k = 0
+    while (k < x.length && k < y.length && x[k] == y[k]) k++
+    return k
+}
+
+function scratch_bar_blocked(i) {
+    var bar = document.getElementById(`bar_${i}`)
+    if (!bar) return
+    bar.classList.remove("scratch-bar-blocked")
+    void bar.offsetWidth
+    bar.classList.add("scratch-bar-blocked")
+    setTimeout(() => bar.classList.remove("scratch-bar-blocked"), 700)
+}
+
+function jump_to_scratch_bar(i) {
+    var target = scratch_bar_jump_target(i)
+    if (!target) return false
+    var savedElapsed = virtualElapsed
+    // The clock is the elapsed time in milliseconds, so the finest step it can
+    // hold is one ULP of the elapsed time itself. The jump is tried on the
+    // steps around the target time and every try is checked exactly the way the
+    // game is going to compute it.
+    var base = get_time_inv(target.u)
+    var grid = Math.pow(2, Math.floor(Math.log2(base)) - 52)         // ms per clock step
+    var first = Math.round(base / grid) * grid                       // grid step at the target
+    // The sequence is only reproduced inside a window of u that can be far
+    // narrower than one grid step — sometimes narrower than one ULP of u — so
+    // reach a few ULPs of u out in both directions.
+    var uPerStep = grid / (4.605170185988091 * 864000 * Math.pow(10, 2 * (target.u - 2)))
+    var reach = Math.max(4, Math.ceil(4 * Math.pow(2, Math.floor(Math.log2(Math.abs(target.u))) - 52) / uPerStep))
+    var want = target.shown.split(",")
+    var bestElapsed = null, bestTerms = -1, got = null
+    for (var k = 0; k <= reach; k++) {
+        var offs = k == 0 ? [0] : [k, -k]
+        for (var q = 0; q < offs.length; q++) {
+            virtualElapsed = first + offs[q] * grid - timeOffset
+            got = num_time(virtualElapsed + timeOffset)
+            if (got[2] == target.shown) {
+                // Redraw straight away instead of waiting for the next frame.
+                document.getElementById("main_lngi_Content").innerHTML = `<i>${got[2]}</i>`
+                document.getElementById("main_lngi_bar").innerHTML = `${got[0]} to next ordinal (${got[1]} left)`
+                return true
+            }
+            var terms = scratch_common_terms(got[2], target.shown)
+            if (terms > bestTerms) { bestTerms = terms; bestElapsed = virtualElapsed }
+        }
+    }
+    // No reachable time reproduces the sequence: the window that does is
+    // narrower than the clock can step. Land on the closest one there is when it
+    // is still recognisably the same sequence, so the click moves the game on,
+    // and flash the bar to show it is not the exact sequence.
+    if (bestElapsed !== null && bestTerms * 2 >= want.length) {
+        virtualElapsed = bestElapsed
+        got = num_time(virtualElapsed + timeOffset)
+        document.getElementById("main_lngi_Content").innerHTML = `<i>${got[2]}</i>`
+        document.getElementById("main_lngi_bar").innerHTML = `${got[0]} to next ordinal (${got[1]} left)`
+        scratch_bar_blocked(i)
+        return false
+    }
+    // Nothing close enough: put the clock back and flash the bar so the click
+    // does not look like it did nothing.
+    virtualElapsed = savedElapsed
+    num_time(virtualElapsed + timeOffset)
+    scratch_bar_blocked(i)
+    return false
 }
 
 var lt = 0
@@ -113,7 +235,7 @@ function update_scratch_bars(x, currentSimulatedTime) {
             }
             
             var t = get_time_inv(u)
-            const secondsLeft = Math.max(0, ((t + st) - currentSimulatedTime) / 1000);
+            const secondsLeft = Math.max(0, (t - currentSimulatedTime) / 1000);
 
             if (page == 1) {
                 document.getElementById(`bar_${i}`).style.visibility = "visible"
@@ -278,10 +400,19 @@ document.getElementById("analysis_add").onclick = () => {
 
 renderAnalysisPanels();
 
+// `t` is the elapsed time in milliseconds, not an absolute timestamp. The
+// clock used to be carried around as `st + elapsed`, and adding the start
+// timestamp rounded the elapsed time onto the grid of doubles of that
+// magnitude: one step there is ~0.24 ms, while the elapsed time itself is a
+// double that can hold ~0.0000005 ms steps. That lost precision made fine
+// changes to the clock unreachable — including jumping to a scratch bar, whose
+// sequence is only reproduced inside a window of u far narrower than one such
+// step. `st` is kept as the wall-clock start (resettime, milestone.js,
+// search.js) but the clock itself is the elapsed time.
 function num_time(t,update_main_bar=true) {
-    var t_elapsed = Math.max(0, t - st)
+    var t_elapsed = Math.max(0, t)
     if (t_elapsed == 0) {
-        return `Not started yet. Wait for the clock to hit.<br>Time left: <span style="font-size: 150%">${((st - t) / 1000).toFixed(3)}s</span>`
+        return `Not started yet. Wait for the clock to hit.<br>Time left: <span style="font-size: 150%">${(-t / 1000).toFixed(3)}s</span>`
     } else {
         var u = get_time(t_elapsed)
         var j = num_to_lngi(u)
@@ -393,11 +524,11 @@ function update() {
     var deltaRealTime = now - lastRealTime;
     virtualElapsed += deltaRealTime*(pause%2)
     lastRealTime = now;
-    var simulatedTime = st + virtualElapsed + timeOffset;
+    var simulatedTime = virtualElapsed + timeOffset;
     var u = num_time(simulatedTime);
     //player_time = simulatedTime
 
-    if (get_time(simulatedTime - st) > 4) {
+    if (get_time(simulatedTime) > 4) {
         const q = document.getElementsByClassName("SHO")
         for (var i in q) {
             q[i].hidden = true
