@@ -2913,6 +2913,12 @@ function formatText(str) {
     return str;
 }
 
+function get_virtual_elapsed() {
+    var base = (typeof virtualElapsed === "number" && isFinite(virtualElapsed)) ? virtualElapsed : 0;
+    var offset = (typeof timeOffset === "number" && isFinite(timeOffset)) ? timeOffset : 0;
+    return base + offset;
+}
+
 var visibleMilestones = new Set();
 
 //in fact, i still idk what's an observer
@@ -2931,8 +2937,9 @@ const milestoneObserver = new IntersectionObserver((entries) => {
 function renderMilestoneBox(element) {
     var M = parseInt(element.dataset.index, 10);
 
-    var ct = get_time(Date.now() - st);
-    var T = Date.now() - get_time_inv(valid_milestones[M][4]) - st;
+    var vt = get_virtual_elapsed();
+    var ct = get_time(vt);
+    var T = vt - get_time_inv(valid_milestones[M][4]);
     var R = valid_milestones[M][3];
 
     element.style["background-image"] = `linear-gradient(45deg,${(ct >= valid_milestones[M][4]) ? `rgba(140,255,140,${1 - R * 0.03})` : `rgba(255,140,140,${1 - R * 0.03})`},white)`;
@@ -2980,11 +2987,12 @@ function update_milestones() {
     });
 
     var N = 0
-    var ct = get_time(Date.now() - st);
-    while (valid_milestones[N][4] < ct) {
+    var vt = get_virtual_elapsed();
+    var ct = get_time(vt);
+    while (N < valid_milestones.length - 1 && valid_milestones[N][4] < ct) {
         N = N+1
     }
-    var T = Date.now() - get_time_inv(valid_milestones[N][4]) - st;
+    var T = vt - get_time_inv(valid_milestones[N][4]) - st;
     document.getElementById("real_milestone_next").innerHTML = `${N}# ${valid_milestones[N][0]} / ${valid_milestones[N][1]}<br>in ${formatSeconds(-T / 1000)}`
 }
 

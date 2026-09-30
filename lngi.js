@@ -99,6 +99,8 @@ function scratch_bar_init() {
         p.style.top = `${i * 6.25}%`
         p.id = `bar_${i}`
         p.style.textWrap = `nowrap`
+        p.title = "Click to jump to this sequence"
+        p.addEventListener("click", () => jump_to_scratch_bar(i))
         document.getElementById("scratch_content").appendChild(p)
     }
 }
@@ -131,6 +133,80 @@ function update_scratch_bars(x, currentSimulatedTime) {
             document.getElementById(`bar_${i}`).style.visibility = "hidden"
         }
     }
+}
+
+function scratch_bar_jump_target(i) {
+    var u_now = get_time(Math.max(0, virtualElapsed + timeOffset))
+    var main_now = num_to_lngi(u_now)[0]
+    var n = super_list.length - 1
+    if (i < 0 || i > n) return null
+    var shown = super_list[i][0]
+    if (i == n && main_now == shown) return { u: u_now, shown: shown, u_now: u_now }
+    var u_target
+    if (i == 0) {
+        u_target = Math.floor(u_now) + 1
+    } else {
+        var m = Math.pow(2, 1 - (super_list[i][1] - super_list[i - 1][1] + 1))
+        for (var j = i - 1; j >= 1; j--) {
+            m = (m + 1) / Math.pow(2, super_list[j][1] - super_list[j - 1][1])
+        }
+        u_target = Math.floor(u_now) + 1 - 2 * m
+    }
+    return { u: u_target, shown: shown, u_now: u_now }
+}
+
+function scratch_common_terms(a, b) {
+    var x = a.split(","), y = b.split(","), k = 0
+    while (k < x.length && k < y.length && x[k] == y[k]) k++
+    return k
+}
+
+function scratch_bar_blocked(i) {
+    var bar = document.getElementById(`bar_${i}`)
+    if (!bar) return
+    bar.classList.remove("scratch-bar-blocked")
+    void bar.offsetWidth
+    bar.classList.add("scratch-bar-blocked")
+    setTimeout(() => bar.classList.remove("scratch-bar-blocked"), 700)
+}
+
+function jump_to_scratch_bar(i) {
+    var target = scratch_bar_jump_target(i)
+    if (!target) return false
+    var savedElapsed = virtualElapsed
+    var base = get_time_inv(target.u)
+    var grid = Math.pow(2, Math.floor(Math.log2(base)) - 52)
+    var first = Math.round(base / grid) * grid
+    var uPerStep = grid / (4.605170185988091 * 864000 * Math.pow(10, 2 * (target.u - 2)))
+    var reach = Math.max(4, Math.ceil(4 * Math.pow(2, Math.floor(Math.log2(Math.abs(target.u))) - 52) / uPerStep))
+    var want = target.shown.split(",")
+    var bestElapsed = null, bestTerms = -1, got = null
+    for (var k = 0; k <= reach; k++) {
+        var offs = k == 0 ? [0] : [k, -k]
+        for (var q = 0; q < offs.length; q++) {
+            virtualElapsed = first + offs[q] * grid - timeOffset
+            got = num_time(virtualElapsed + timeOffset)
+            if (got[2] == target.shown) {
+                document.getElementById("main_lngi_Content").innerHTML = `<i>${got[2]}</i>`
+                document.getElementById("main_lngi_bar").innerHTML = `${got[0]} to next ordinal (${got[1]} left)`
+                return true
+            }
+            var terms = scratch_common_terms(got[2], target.shown)
+            if (terms > bestTerms) { bestTerms = terms; bestElapsed = virtualElapsed }
+        }
+    }
+    if (bestElapsed !== null && bestTerms * 2 >= want.length) {
+        virtualElapsed = bestElapsed
+        got = num_time(virtualElapsed + timeOffset)
+        document.getElementById("main_lngi_Content").innerHTML = `<i>${got[2]}</i>`
+        document.getElementById("main_lngi_bar").innerHTML = `${got[0]} to next ordinal (${got[1]} left)`
+        scratch_bar_blocked(i)
+        return false
+    }
+    virtualElapsed = savedElapsed
+    num_time(virtualElapsed + timeOffset)
+    scratch_bar_blocked(i)
+    return false
 }
 
 scratch_bar_init()
