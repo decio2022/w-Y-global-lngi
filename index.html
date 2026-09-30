@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ω-Y Sequence Typing Game</title>
+    <link rel="stylesheet" href="game.css">
+</head>
+<body>
+    <div class="game-container">
+        <header class="game-header">
+            <h1>ω-Y Sequence Typing Game</h1>
+            <div class="header-controls">
+                <label for="max-length">Max Terms: </label>
+                <select id="max-length">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4" selected>4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                    <option value="8">8</option>
+                    <option value="9">9</option>
+                    <option value="10">10</option>
+                </select>
+                <button id="resetBtn" title="Reset all progress">Reset</button>
+            </div>
+        </header>
+
+        <div class="game-main">
+            <div class="sequence-display">
+                <div class="target-sequence" id="targetSequence">Target: 1</div>
+                <div class="current-progress" id="currentProgress">Your sequence: 1</div>
+                <div class="input-area">
+                    <input type="text" id="sequenceInput" placeholder="Type the sequence terms separated by commas (e.g., 1, 1)" autocomplete="off" spellcheck="false">
+                    <button id="submitBtn">Submit</button>
+                </div>
+                <div class="feedback" id="feedback"></div>
+
+                <div class="saved-sequences" id="savedSequences">
+                    <h4>Saved Sequences (click to fill input)</h4>
+                    <div class="saved-list" id="savedList"></div>
+                </div>
+            </div>
+
+            <div class="stats-panel">
+                <h3>Term Progress Tracker</h3>
+                <div class="terms-grid" id="termsGrid"></div>
+                <div class="step-history" id="stepHistory"></div>
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <h3>How to Play</h3>
+            <ul>
+                <li>Type the ω-Y sequence terms one by one</li>
+                <li>Sequence starts at <strong>1</strong>, grows: <strong>1, 1</strong> → <strong>1, 2</strong> → <strong>1, 2, 4</strong> → <strong>1, 2, 4, 7</strong> → <strong>1, 2, 4, 8</strong> → ...</li>
+                <li>Set <strong>Max Terms</strong> to limit sequence length</li>
+                <li>When max length reached, last term keeps increasing until its limit</li>
+                <li>Correct sequences are saved below for quick reference</li>
+                <li>Track how many steps each term takes to increase</li>
+            </ul>
+        </div>
+    </div>
+
+    <script src="conv.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
