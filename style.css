@@ -177,6 +177,35 @@ h2 {
 
     border-radius: 3px;
     white-space: nowrap;
+
+    cursor: pointer;
+}
+
+#scratch_content>div:not(.resize-handle):hover {
+    filter: brightness(0.94);
+    outline: 1px solid #888;
+}
+
+/* A bar whose sequence is too close to (or beyond) the current one to jump to */
+#scratch_content>div.scratch-bar-blocked {
+    animation: scratch-bar-blocked 0.7s ease-in-out;
+}
+
+@keyframes scratch-bar-blocked {
+
+    0%,
+    100% {
+        box-shadow: none;
+    }
+
+    25%,
+    75% {
+        box-shadow: 0 0 0 2px #c0392b inset;
+    }
+
+    50% {
+        box-shadow: 0 0 0 4px #c0392b inset;
+    }
 }
 
 /* Modal */
