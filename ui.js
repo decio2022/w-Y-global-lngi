@@ -198,6 +198,11 @@ function saveAllSettings() {
         Y_Terms: Number(document.getElementById("Y_Terms").value),
         BMS_Terms: Number(document.getElementById("BMS_Terms").value),
 
+        // News ticker
+        ticker_enabled: document.getElementById("ticker_enabled").checked,
+        ticker_events: document.getElementById("ticker_events").checked,
+        ticker_speed: Number(document.getElementById("ticker_speed").value),
+
         // Milestone Settings
         Scratch_bar_height: Number(document.getElementById("Scratch_bar_height").value),
 
@@ -260,6 +265,9 @@ function loadAllSettings() {
         setCheck("format_cOCF", settings.format_cOCF);
         setVal("Y_Terms", settings.Y_Terms);
         setVal("BMS_Terms", settings.BMS_Terms);
+        setCheck("ticker_enabled", settings.ticker_enabled);
+        setCheck("ticker_events", settings.ticker_events);
+        setVal("ticker_speed", settings.ticker_speed);
         setVal("Scratch_bar_height", settings.Scratch_bar_height);
         setVal("ROWHEIGHT", settings.ROWHEIGHT);
         setVal("COLUMNWIDTH", settings.COLUMNWIDTH);
@@ -288,7 +296,8 @@ function loadAllSettings() {
 function attachAutoSaveListeners() {
     const selectorIds = [
         "font_family", "font_size", "compress_bms", "format_cOCF",
-        "Y_Terms", "BMS_Terms", "Scratch_bar_height", 
+        "Y_Terms", "BMS_Terms", "Scratch_bar_height",
+        "ticker_enabled", "ticker_events", "ticker_speed",
         "ROWHEIGHT", "COLUMNWIDTH", "LINETHICKNESS", "NUMBERSIZE", "NUMBERTHICKNESS",
         "MAXDIMENSIONS", "MaxTerms", "STACKMODE", "HIGHLIGHT", "EXTRADIVIDER", "_UPDATEMODE"
     ];

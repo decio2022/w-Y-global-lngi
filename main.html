@@ -34,6 +34,14 @@
         </div>
     </div>
 
+    <div class="news-ticker" id="news_ticker">
+        <div class="ticker-label" id="ticker_label">📰 NEWS</div>
+        <div class="ticker-window" id="ticker_window" title="News ticker — hover to hold it still">
+            <div class="ticker-track" id="ticker_track"></div>
+        </div>
+        <button class="ticker-btn" id="ticker_playpause" title="Pause the ticker">❚❚</button>
+    </div>
+
 
     <div class="top-row" id="top/row">
         <div class="card" id="time">Time elapsed: Loading...</div>
@@ -358,6 +366,33 @@
             </div>
             <hr>
             <div class="modal-header">
+                <h3>News ticker</h3>
+            </div>
+
+            <div class="modal-body checkbox-row">
+                <input type="checkbox" id="ticker_enabled" checked>
+                <label for="ticker_enabled">
+                    Show the news ticker under the header
+                </label>
+            </div>
+
+            <div class="modal-body checkbox-row">
+                <input type="checkbox" id="ticker_events" checked>
+                <label for="ticker_events">
+                    Include headlines (milestones reached, new term records, rewinds, pauses)
+                </label>
+            </div>
+
+            <div class="modal-body checkbox-row">
+                <label>Scroll speed : <input id="ticker_speed" type="number" min="0" max="400" step="5" value="45"> px /
+                    second</label>
+            </div>
+
+            <div class="modal-body checkbox-row">
+                <button id="ticker_clear" style="border-radius: 3px;">Clear headlines</button>
+            </div>
+            <hr>
+            <div class="modal-header">
                 <button style="border-radius: 3px;"
                     onclick="mystery()">Enable
                     dev settings?</button>
@@ -377,6 +412,7 @@
 <script src="lngi.js"></script>
 <script src="milestone.js"></script>
 <script src="visualizer.js"></script>
+<script src="ticker.js"></script>
 <script src="final_load.js" defer></script>
 
 </html>

@@ -636,3 +636,122 @@ h2 {
     flex: 1;
     overflow-wrap: anywhere;
 }
+/* News ticker (the bar under the header) */
+.news-ticker {
+    display: flex;
+    align-items: stretch;
+    height: 34px;
+    background: #16202b;
+    color: #cfe0ff;
+    border-radius: 5px;
+    overflow: hidden;
+    font-size: calc(var(--font-size) * 0.95);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+}
+
+.news-ticker[hidden] {
+    display: none;
+}
+
+.ticker-label {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    padding: 0 12px;
+    background: #c0392b;
+    color: #fff;
+    font-weight: bold;
+    letter-spacing: .5px;
+    white-space: nowrap;
+}
+
+.ticker-label.waiting {
+    background: #2b6cb0;
+}
+
+.ticker-label.paused {
+    background: #6b7280;
+}
+
+.ticker-window {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
+}
+
+/* "prefers-reduced-motion" is on: no marquee, the bar is scrolled by hand */
+.ticker-window.ticker-static {
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.ticker-track {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    white-space: nowrap;
+    will-change: transform;
+}
+
+.ticker-item {
+    flex: 0 0 auto;
+    padding: 0 2px;
+}
+
+.ticker-item[data-page] {
+    cursor: pointer;
+}
+
+.ticker-item[data-page]:hover {
+    color: #ffe9a8;
+    text-decoration: underline;
+}
+
+.ticker-sep {
+    flex: 0 0 34px;
+    text-align: center;
+    opacity: .45;
+}
+
+.ticker-now {
+    font-weight: bold;
+    color: #fff;
+}
+
+.ticker-milestone,
+.ticker-record,
+.ticker-event {
+    color: #ffd966;
+}
+
+.ticker-event-rewind {
+    color: #ff9d9d;
+}
+
+.ticker-tip,
+.ticker-wait {
+    color: #9fd0ff;
+}
+
+.ticker-age {
+    opacity: .6;
+}
+
+.ticker-btn {
+    flex: 0 0 auto;
+    border: none;
+    background: rgba(255, 255, 255, .1);
+    color: #eef4ff;
+    padding: 0 12px;
+    font-size: 90%;
+    cursor: pointer;
+}
+
+.ticker-btn:hover {
+    background: rgba(255, 255, 255, .22);
+}

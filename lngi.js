@@ -387,6 +387,8 @@ let MaxYTerms = document.getElementById("MaxTerms")
 const PAUSE_CLICK_IGNORE_SELECTOR = [
     // Header chrome: title, visitor counter and the tab buttons (+ gaps).
     ".header",
+    // News ticker: its items are clickable shortcuts to tabs.
+    ".news-ticker",
     // Settings dialog (including its backdrop).
     ".modal",
     // Any interactive element, anywhere on the page.
