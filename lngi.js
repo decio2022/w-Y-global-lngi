@@ -4,7 +4,7 @@ let st = (1782316800000 + 23 * 3600000) + 864 * 1000
 var timeSpeed = 1.0;
 var timeOffset = 0;       
 var virtualElapsed = 1; 
-var milestoneMulti = 1;
+var milestoneMulti = 0.002;
 var pause = 2;
 var lastRealTime = Date.now();
 
@@ -264,14 +264,14 @@ const upg2 = 2.000000000000002
 function get_time(t) {
     var R = (Math.log10(1 + t / 864000) / 2 + 2)
     if (R > upg1) {
-        R = (((R - upg1) / (upg2 - upg1) * 0.002) ** 3.4) * (upg2 - upg1) + upg1
+        R = (((R - upg1) / (upg2 - upg1) * milestoneMulti) ** 3.4) * (upg2 - upg1) + upg1
     }
     return R
 }
 
 function get_time_inv(n) {
     if (n > upg1) {
-        n = (((n - upg1) / (upg2 - upg1)) ** (1/3.4)) / 0.002 * (upg2 - upg1) + upg1
+        n = (((n - upg1) / (upg2 - upg1)) ** (1/3.4)) / milestoneMulti * (upg2 - upg1) + upg1
     }
     var S = (10 ** ((n - 2) * 2) - 1) * 864000
     return S
