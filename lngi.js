@@ -258,8 +258,8 @@ function num_to_lngi(m) {
     return ntl(m)
 }
 
-const upg1 = 3.200000000005856
-const upg2 = 3.200348472957284
+const upg1 = 3.007999420166016
+const upg2 = 3.008056640625
 
 function get_time(t) {
     var R = (Math.log10(1 + t / 864000) / 2 + 2)
