@@ -217,6 +217,9 @@ var super_list = []
 function ntl(m) {
     super_list = []
     var ord = `1,${Math.max(1, Math.floor(m))}`
+    if (m > 20) {
+        return [ord,m,0]
+}
     var steps = 0
     var m = 1 - (m % 1)
     while (ord.length < 100 && ord.split(",").at(-1) < 1e8 && steps < 53) {
@@ -258,20 +261,23 @@ function num_to_lngi(m) {
     return ntl(m)
 }
 
-const upg1 = 3.007999420166016
-const upg2 = 3.008056640625
+const upg1 = 3.00000003846372
+const upg2 = 3.00137462840000
+
+const exp = 13.036562
+const spd = 0.002001
 
 function get_time(t) {
     var R = (Math.log10(1 + t / 864000) / 2 + 2)
     if (R > upg1) {
-        R = (((R - upg1) / (upg2 - upg1) * milestoneMulti) ** 3.4) * (upg2 - upg1) + upg1
+        R = (((R - upg1) / (upg2 - upg1) * spd) ** exp) * (upg2 - upg1) + upg1
     }
     return R
 }
 
 function get_time_inv(n) {
     if (n > upg1) {
-        n = (((n - upg1) / (upg2 - upg1)) ** (1/3.4)) / milestoneMulti * (upg2 - upg1) + upg1
+        n = (((n - upg1) / (upg2 - upg1)) ** (1/exp)) / spd * (upg2 - upg1) + upg1
     }
     var S = (10 ** ((n - 2) * 2) - 1) * 864000
     return S
