@@ -162,11 +162,11 @@ function num_to_lngi(m) {
 //1,3,4,2,5,6 => 4.007999420166016
 //1,3,4,3 => 4.008056640625
 
-const upg1 = 4.007999420166016
-const upg2 = 4.008056640625
+const upg1 = 3.00000003846372
+const upg2 = 3.00137462840000
 
-const exp = 3.4
-const spd = 0.002
+const exp = 13.036562
+const spd = 0.002001
 
 function get_time(t) {
     var R = (Math.log10(1 + t / 864000) / 2 + 2)
