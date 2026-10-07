@@ -80,7 +80,7 @@ Scratch_bar_height.addEventListener("input", function () {
     );
 });
 
-let page = 0; // 0: main, 1: progress, 2: milestone (and 3: some cool mountain)
+let page = 0; // 0: main, 1: progress, 2: milestone (and 3: some cool mountain), 4: real milestones, 5: buddy, 6: credits, 7: progress of the searched ordinal
 //did u even do that
 //just compress it into a SINGLE FUNCTION thats so good :3
 const btn_lngi = document.getElementById("btn_lngi");
@@ -101,6 +101,13 @@ const btn_search = document.getElementById("btn_search");
 
 btn_search.addEventListener("click", () => {
     page = 2;
+    update_page()
+});
+
+const btn_search_progress = document.getElementById("btn_search_progress");
+
+btn_search_progress.addEventListener("click", () => {
+    page = 7;
     update_page()
 });
 
@@ -135,8 +142,9 @@ btn_credits.addEventListener("click", () => {
 function update_page() {
     document.getElementById("analysis_container").style.display = page == 0 ? "flex" : "none"
     document.getElementById("analysis_toolbar").style.display = page == 0 ? "flex" : "none"
-    document.getElementById("milestone_header").style.display = page == 1 ? "flex" : "none"
-    document.getElementById("scratch_bars").hidden = (page != 1)
+    document.getElementById("milestone_header").style.display = (page == 1 || page == 7) ? "flex" : "none"
+    document.getElementById("scratch_bars").hidden = (page != 1 && page != 7)
+    document.getElementById("search_progress_source_row").hidden = (page != 7)
     document.getElementById("future-milestone").hidden = (page != 2)
     document.getElementById("future-milestone").style.display = page == 2 ? "flex" : "none"
     document.getElementById("mountain").hidden = (page != 3)

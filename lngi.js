@@ -78,30 +78,33 @@ function scratch_bar_init() {
 }
 
 var lt = 0
-function update_scratch_bars(x, currentSimulatedTime) {
+//live = false draws the same bars for the searched ordinal (search progress tab)
+function update_scratch_bars(x, currentSimulatedTime, list = super_list, live = true) {
+    const draw = live ? page == 1 : page == 7
     for (var i = 0; i < 53; i++) {
-        if (i < super_list.length) {
-            var u = x + super_list[i][2] / (2 ** super_list[i][1] / 2)
+        if (i < list.length) {
+            var u = x + list[i][2] / (2 ** list[i][1] / 2)
             if (i == 0) {
-                u = Math.ceil(x)
+                //the top bar is the next integer milestone (an exact value steps one further)
+                u = x % 1 == 0 ? x + 1 : Math.ceil(x)
             }
             
             var t = get_time_inv(u)
             const secondsLeft = Math.max(0, ((t + st) - currentSimulatedTime) / 1000);
 
-            if (page == 1) {
+            if (draw) {
                 document.getElementById(`bar_${i}`).style.visibility = "visible"
                 document.getElementById(`bar_${i}`).innerHTML =
-                    `${convert_From_wY(super_list[i][0] + (i == super_list.length - 1 ? ",1" : ""), scratch_bar_display)} <small>(${((1 - super_list[i][2]) * 100).toFixed(2)}% / 
+                    `${safe_convert(list[i][0] + (i == list.length - 1 ? ",1" : ""), scratch_bar_display)} <small>(${((1 - list[i][2]) * 100).toFixed(2)}% / 
                 ${tt == 0 ? `${formatSeconds(secondsLeft)} left` : `in ${new Date(secondsLeft * 1000 + currentSimulatedTime).toLocaleString()}`})</small>`
 
-                document.getElementById(`bar_${i}`).style.backgroundColor = `hsl(${super_list[i][1] * 10},100%,90%)`
-                document.getElementById(`bar_${i}`).style.width = `${(1 - super_list[i][2]) * 100}%`
+                document.getElementById(`bar_${i}`).style.backgroundColor = `hsl(${list[i][1] * 10},100%,90%)`
+                document.getElementById(`bar_${i}`).style.width = `${(1 - list[i][2]) * 100}%`
             }
-            if (i + 1 == super_list.length) {
+            if (live && i + 1 == list.length) {
                 lt = secondsLeft
             }
-        } else {
+        } else if (draw) {
             document.getElementById(`bar_${i}`).style.visibility = "hidden"
         }
     }
@@ -184,10 +187,54 @@ function get_time_inv(n) {
     return S
 }
 
+//converts a ω-Y sequence for display, never letting a notation's range stop the app
+function safe_convert(ord, mode) {
+    try {
+        return convert_From_wY(ord, mode)
+    } catch (e) {
+        console.warn(`Can't convert ${ord} to ${mode}:`, e)
+        return ord
+    }
+}
+
 //The sequence the analysis part converts: the one searched in the Search tab,
 //falling back to 1,1 when no (valid) sequence has been searched
 function analysis_sequence() {
     return (typeof searched_ordinal == "string" && searched_ordinal != "") ? searched_ordinal : "1,1"
+}
+
+//The value of the searched ordinal (the value of 1,1 is 2)
+function analysis_value() {
+    return (typeof searched_value == "number" && isFinite(searched_value)) ? searched_value : 2
+}
+
+//The ladder of ordinals leading to the next milestone, for the searched ordinal
+var searched_ladder = { value: null, list: [] }
+function searched_progress() {
+    const v = analysis_value()
+    if (searched_ladder.value !== v) {
+        const live_list = super_list
+        num_to_lngi(v) //fills super_list with the ladder of that value
+        searched_ladder = { value: v, list: super_list }
+        super_list = live_list //the live ladder must stay untouched
+    }
+    return searched_ladder
+}
+
+//says which ordinal the search progress tab is showing right now
+var search_progress_source_cache = null
+function update_search_progress_source() {
+    const el = document.getElementById("search_progress_source")
+    if (!el) return
+
+    const searched = typeof searched_ordinal == "string" && searched_ordinal != ""
+    const html = `<b>${searched ? searched_ordinal : "1,1"}</b>` +
+        (searched ? "" : ` <small><i>(nothing valid searched, using 1,1)</i></small>`)
+
+    if (search_progress_source_cache !== html) {
+        search_progress_source_cache = html
+        el.innerHTML = html
+    }
 }
 
 function renderAnalysisPanels() {
@@ -331,18 +378,20 @@ function update() {
                     txt = "<i>" + analysis_seq + "</i>";
                     break;
                 default:
-                    try {
-                        txt = convert_From_wY(analysis_seq, panel.notation);
-                    } catch (e) {
-                        //a searched sequence can leave a notation's range, never let that stop the app
-                        console.warn(`Can't convert ${analysis_seq} to ${panel.notation}:`, e);
-                        txt = analysis_seq;
-                    }
+                    //a searched sequence can leave a notation's range, never let that stop the app
+                    txt = safe_convert(analysis_seq, panel.notation);
                     break;
             }
             panel.element.innerHTML = txt;
         })
     };
+    if (page == 7) {
+        //search progress tab: the same bars, but for the ordinal searched in the Search tab.
+        //its times are measured from that ordinal itself, so they read as "N after it"
+        const sp = searched_progress();
+        update_scratch_bars(sp.value, get_time_inv(sp.value) + st, sp.list, false);
+        update_search_progress_source();
+    }
     const modifiedElapsedSeconds = Math.max(0, (virtualElapsed + timeOffset) / 1000);
     let timeStatusText = "";
     const trueElapsedSeconds = Math.max(0, (now - st) / 1000);

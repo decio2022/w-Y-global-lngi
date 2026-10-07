@@ -206,12 +206,17 @@ document.querySelectorAll("[data-year]").forEach(btn => {
 //the ω-Y sequence that was last searched in the Search tab
 //(the analysis part shows it, falling back to 1,1 when it's null)
 var searched_ordinal = null
+//its value, used by the search progress tab (the value of 1,1 is 2)
+var searched_value = null
 
 function search_time(x = document.getElementById("search_input").value) {
     //only a call coming from the Search tab input itself (no argument passed)
     //updates the sequence shown in the analysis part
     var fromSearchTab = arguments.length == 0
-    if (fromSearchTab) searched_ordinal = null
+    if (fromSearchTab) {
+        searched_ordinal = null
+        searched_value = null
+    }
 
     var t = String(x ?? "").trim()
     var r = ""
@@ -245,7 +250,10 @@ function search_time(x = document.getElementById("search_input").value) {
 
     if (l.length == 1) {
         document.getElementById("search_result").innerHTML = `This lngi starts at 1,1 :3`
-        if (fromSearchTab) searched_ordinal = "1,1"
+        if (fromSearchTab) {
+            searched_ordinal = "1,1"
+            searched_value = 2
+        }
         return [0, 0]
     }
 
@@ -255,7 +263,10 @@ function search_time(x = document.getElementById("search_input").value) {
 
     if (l.length == 2) {
         document.getElementById("search_result").innerHTML = `Achievement day:<br>${new Date(get_time_inv(r) + st).toLocaleString()}`
-        if (fromSearchTab) searched_ordinal = l.join(",")
+        if (fromSearchTab) {
+            searched_ordinal = l.join(",")
+            searched_value = r
+        }
         return [r, 1]
     }
 
@@ -298,7 +309,10 @@ function search_time(x = document.getElementById("search_input").value) {
         //another case we have to care abt is
         //when fs is 0...
     }
-    if (fromSearchTab) searched_ordinal = l.join(",")
+    if (fromSearchTab) {
+        searched_ordinal = l.join(",")
+        searched_value = r
+    }
     var t = get_time_inv(r) + st
     document.getElementById("search_result").innerHTML = `Achievement day:<br>${new Date(t).toLocaleString()} <small><i>${(t%1000).toFixed(3)}ms</i></small>`
     return [r,-Math.log2(i)]
