@@ -9011,7 +9011,9 @@ function convert_From_wY(ord, mode) {
     }
 
     if (mode == "cOCF") {
-        if (Y_Sequence.cmp(ord, '1,2,4,8,16,26') == -1) {
+        //above 1,2,4,8,16 the conversion would need Lim_cOCF_in_BMS, which doesn't exist yet,
+        //so like the other notations we just show the w-Y sequence there
+        if (Y_Sequence.cmp(ord, '1,2,4,8,16') == -1) {
             if (format_cOCF.checked)
                 return cOCF.convert(Conv_BMS_cOCF(trimArrayList(Conv_Y_sequence_BMS(ord), BMS_Terms.valueAsNumber)));
             else

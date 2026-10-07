@@ -203,78 +203,109 @@ document.querySelectorAll("[data-year]").forEach(btn => {
 
 
 
+//the ω-Y sequence that was last searched in the Search tab
+//(the analysis part shows it, falling back to 1,1 when it's null)
+var searched_ordinal = null
+
 function search_time(x = document.getElementById("search_input").value) {
-    var t = x
+    //only a call coming from the Search tab input itself (no argument passed)
+    //updates the sequence shown in the analysis part
+    var fromSearchTab = arguments.length == 0
+    if (fromSearchTab) searched_ordinal = null
+
+    var t = String(x ?? "").trim()
     var r = ""
+
+    if (t == "") {
+        //null sequence: the analysis part falls back to 1,1
+        if (fromSearchTab) document.getElementById("search_result").innerHTML = "Please insert ordinal!"
+        return [0, 0]
+    }
+
     if (t[0] != 1) {
         r = "Please insert valid ordinal starting with 1!"
         document.getElementById("search_result").innerHTML = r
-        return
+        return [0, 0]
     }
-    else {
-        var l = t.split(",")
-        var seq = `1,${Number(l[1]) + 1}`
-        var r = Number(l[1])+1
-        var i = 1
 
-        if (l.length == 1) {
-            document.getElementById("search_result").innerHTML = `This lngi starts at 1,1 :3`
-            return [0,0]
-        }
+    //every term has to be a positive integer, otherwise the sequence is invalid
+    var l = t.split(",").map(p => p.trim())
 
-        if (l.length == 2) {
-            document.getElementById("search_result").innerHTML = `Achievement day:<br>${new Date(get_time_inv(r) + st).toLocaleString()}`
-            return [r,1]
-        }
+    if (l.some(p => !/^-?\d+$/.test(p))) {
+        document.getElementById("search_result").innerHTML = "Please insert a valid ordinal!"
+        return [0, 0]
+    }
 
-        if (Math.min(...l)<=0) {
-            document.getElementById("search_result").innerHTML = `Don't put zero or negative values in!`
+    l = l.map(Number)
+
+    if (l.some(p => p <= 0)) {
+        document.getElementById("search_result").innerHTML = `Don't put zero or negative values in!`
+        return [0, 0]
+    }
+
+    if (l.length == 1) {
+        document.getElementById("search_result").innerHTML = `This lngi starts at 1,1 :3`
+        if (fromSearchTab) searched_ordinal = "1,1"
+        return [0, 0]
+    }
+
+    var seq = `1,${l[1] + 1}`
+    var r = l[1] + 1
+    var i = 1
+
+    if (l.length == 2) {
+        document.getElementById("search_result").innerHTML = `Achievement day:<br>${new Date(get_time_inv(r) + st).toLocaleString()}`
+        if (fromSearchTab) searched_ordinal = l.join(",")
+        return [r, 1]
+    }
+
+    console.log(x)
+    var check = 2
+    var safe = 1
+    while (i > 1e-14) {
+        //step one: expand
+        var aseq = seq
+        seq = Y_Sequence.fs(seq, safe+1).split(",") //the result is a string, need to convert into list for .at
+        //step two: cut the term to match last term
+        //like when insert 1,3,3; should check 1,4 first and expand into 1,3,10
+        //1,3,10 is the same length as the 3rd term, just compare it
+        //if not, then we don't
+        seq = seq.slice(0, check + safe)
+        //now we do the thing
+        var d = Number(seq.at(-1)) - Number(l[check + safe - 1])
+        console.log(aseq, seq, d, safe)
+        if (d < 0) {
+            //invalid (non standard) sequence: the analysis part falls back to 1,1
+            document.getElementById("search_result").innerHTML = `Not standard.`
             return [0, 0]
         }
-        
-        console.log(x)
-        var check = 2
-        var safe = 1
-        while (i > 1e-14) {
-            //step one: expand
-            var aseq = seq
-            seq = Y_Sequence.fs(seq, safe+1).split(",") //the result is a string, need to convert into list for .at
-            //step two: cut the term to match last term
-            //like when insert 1,3,3; should check 1,4 first and expand into 1,3,10
-            //1,3,10 is the same length as the 3rd term, just compare it
-            //if not, then we don't
-            seq = seq.slice(0, check + safe)
-            //now we do the thing
-            var d = Number(seq.at(-1)) - Number(l[check + safe - 1])
-            console.log(aseq, seq, d, safe)
-            if (d < 0) {
-                document.getElementById("search_result").innerHTML = `Not standard.`
-                return [0,0]
-            }
-            i =  i / (2 ** (d + 1)); r += i
+        i =  i / (2 ** (d + 1)); r += i
 
-            //ready for next iteration
-            if (d != 0) {
-                seq[check + safe - 1] = Number(l[check + safe - 1]) + 1
-                seq = seq.join(",")
-                check += safe
-                safe = 1
-            } else {
-                seq = aseq
-                safe++
-            }
-            if (l.length == check + safe - 1) {
-                break
-            }
-
-            //another case we have to care abt is
-            //when fs is 0...
+        //ready for next iteration
+        if (d != 0) {
+            seq[check + safe - 1] = Number(l[check + safe - 1]) + 1
+            seq = seq.join(",")
+            check += safe
+            safe = 1
+        } else {
+            seq = aseq
+            safe++
         }
-        var t = get_time_inv(r) + st
-        document.getElementById("search_result").innerHTML = `Achievement day:<br>${new Date(t).toLocaleString()} <small><i>${(t%1000).toFixed(3)}ms</i></small>`
-        return [r,-Math.log2(i)]
+        if (l.length == check + safe - 1) {
+            break
+        }
+
+        //another case we have to care abt is
+        //when fs is 0...
     }
+    if (fromSearchTab) searched_ordinal = l.join(",")
+    var t = get_time_inv(r) + st
+    document.getElementById("search_result").innerHTML = `Achievement day:<br>${new Date(t).toLocaleString()} <small><i>${(t%1000).toFixed(3)}ms</i></small>`
+    return [r,-Math.log2(i)]
 }
+
+//browsers remember what was typed in the input after a reload, so restore it here too
+window.addEventListener("DOMContentLoaded", () => search_time())
 
 function go_2048() {
     document.getElementById('sex').value = '1,2,4,8,16,32,64,128,256,512,1024,2048'

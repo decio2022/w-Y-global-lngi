@@ -184,6 +184,12 @@ function get_time_inv(n) {
     return S
 }
 
+//The sequence the analysis part converts: the one searched in the Search tab,
+//falling back to 1,1 when no (valid) sequence has been searched
+function analysis_sequence() {
+    return (typeof searched_ordinal == "string" && searched_ordinal != "") ? searched_ordinal : "1,1"
+}
+
 function renderAnalysisPanels() {
     analysisContainer.innerHTML = "";
 
@@ -316,14 +322,22 @@ function update() {
     document.getElementById("tps").innerHTML = `${tps.toFixed(1)} tps`
     if (page == 3 && sync_mountain.checked) { document.getElementById("input").value = trimStringList(u[2], MaxYTerms.valueAsNumber) }
     if (page == 0) {
+        //the analysis part shows the sequence searched in the Search tab (1,1 if there's none)
+        const analysis_seq = analysis_sequence();
         analysisPanels.forEach(panel => {
             let txt = "";
             switch (panel.notation) {
                 case "wY":
-                    txt = "<i>" + u[2] + "</i>";
+                    txt = "<i>" + analysis_seq + "</i>";
                     break;
                 default:
-                    txt = convert_From_wY(u[2], panel.notation);
+                    try {
+                        txt = convert_From_wY(analysis_seq, panel.notation);
+                    } catch (e) {
+                        //a searched sequence can leave a notation's range, never let that stop the app
+                        console.warn(`Can't convert ${analysis_seq} to ${panel.notation}:`, e);
+                        txt = analysis_seq;
+                    }
                     break;
             }
             panel.element.innerHTML = txt;
