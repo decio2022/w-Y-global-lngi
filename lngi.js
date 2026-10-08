@@ -78,9 +78,8 @@ function scratch_bar_init() {
 }
 
 var lt = 0
-//live = false draws the same bars for the searched ordinal (search progress tab)
-function update_scratch_bars(x, currentSimulatedTime, list = super_list, live = true) {
-    const draw = live ? page == 1 : page == 7
+function update_scratch_bars(x, currentSimulatedTime, list = super_list) {
+    const draw = page == 1
     for (var i = 0; i < 53; i++) {
         if (i < list.length) {
             var u = x + list[i][2] / (2 ** list[i][1] / 2)
@@ -101,7 +100,7 @@ function update_scratch_bars(x, currentSimulatedTime, list = super_list, live = 
                 document.getElementById(`bar_${i}`).style.backgroundColor = `hsl(${list[i][1] * 10},100%,90%)`
                 document.getElementById(`bar_${i}`).style.width = `${(1 - list[i][2]) * 100}%`
             }
-            if (live && i + 1 == list.length) {
+            if (i + 1 == list.length) {
                 lt = secondsLeft
             }
         } else if (draw) {
@@ -228,12 +227,106 @@ function update_search_progress_source() {
     if (!el) return
 
     const searched = typeof searched_ordinal == "string" && searched_ordinal != ""
+    const sp = searched_progress()
+    const milestone = sp.list.length && sp.list[0][0]
+    const total = milestone ? sp.list[sp.list.length - 1][1] : 0
     const html = `<b>${searched ? searched_ordinal : "1,1"}</b>` +
-        (searched ? "" : ` <small><i>(nothing valid searched, using 1,1)</i></small>`)
+        (searched ? "" : ` <small><i>(nothing valid searched, using 1,1)</i></small>`) +
+        (milestone
+            ? ` <small>— next milestone ${safe_convert(milestone, scratch_bar_display)} in ${total} step${total == 1 ? "" : "s"}</small>`
+            : ` <small><i>— too large to walk</i></small>`)
 
     if (search_progress_source_cache !== html) {
         search_progress_source_cache = html
         el.innerHTML = html
+    }
+}
+
+//"2nd", "3rd", ... for the search progress bars
+function ordinal_suffix(n) {
+    const s = ["th", "st", "nd", "rd"], v = n % 100
+    return n + (s[(v - 20) % 10] || s[v] || s[0])
+}
+
+//For the searched ordinal: the number of steps until each of its terms is updated.
+//The ladder is walked from the searched ordinal itself up to the next milestone,
+//and the first stage where a term differs is the update of that term.
+function term_updates(sp) {
+    const ladder = sp.list
+    if (!ladder.length) return []
+
+    const base = analysis_sequence().split(",").map(Number) //the searched ordinal's own terms
+    const total = ladder[ladder.length - 1][1]              //steps from it to the next milestone
+    const updates = [], done = new Set()
+
+    //the deepest stage is the searched ordinal's own position (its shape may differ by a
+    //trailing term), so only the stages above it count as updates
+    for (let i = ladder.length - 2; i >= 0; i--) {
+        const stage = ladder[i][0].split(",").map(Number)
+        const steps = total - ladder[i][1]
+        for (let term = 2; term <= 50; term++) {
+            if (done.has(term)) continue
+            if (stage[term - 1] !== base[term - 1]) {
+                done.add(term)
+                updates.push({ term, steps, ord: ladder[i][0] })
+            }
+        }
+    }
+
+    return updates.sort((a, b) => a.term - b.term)
+}
+
+var searched_term_updates = { value: null, list: [] }
+function searched_progress_terms() {
+    const sp = searched_progress()
+    if (searched_term_updates.value !== sp.value) {
+        searched_term_updates = { value: sp.value, list: term_updates(sp) }
+    }
+    return searched_term_updates.list
+}
+
+//The search progress bars: one bar per term of the searched ordinal
+//(the first bar is the 2nd term), each showing how many steps it takes to update it.
+//Unlike the live bars these never change, so the drawing is only redone when
+//the searched ordinal or the notation changes.
+var search_progress_cache = { key: null, bars: [] }
+function search_progress_bars() {
+    const sp = searched_progress()
+    const key = `${sp.value}|${scratch_bar_display}`
+    if (search_progress_cache.key !== key) {
+        const updates = searched_progress_terms()
+        const max = updates.reduce((m, u) => Math.max(m, u.steps), 0)
+
+        search_progress_cache = {
+            key: key,
+            bars: updates.map(u => ({
+                html: `${safe_convert(u.ord, scratch_bar_display)} <small>(${ordinal_suffix(u.term)} term: ${u.steps} step${u.steps == 1 ? "" : "s"})</small>`,
+                width: `${max > 0 ? (u.steps / max) * 100 : 100}%`,
+                color: `hsl(${u.steps * 10},100%,90%)`
+            }))
+        }
+    }
+    return search_progress_cache.bars
+}
+
+function update_search_progress_bars() {
+    const bars = search_progress_bars()
+
+    for (var i = 0; i < 53; i++) {
+        const bar = document.getElementById(`bar_${i}`)
+        const b = bars[i]
+
+        if (!b) {
+            //terms that don't change before the next milestone have no bar
+            bar.style.visibility = "hidden"
+            bar.innerHTML = ""
+            continue
+        }
+
+        bar.style.visibility = "visible"
+        bar.style.width = b.width
+        bar.style.backgroundColor = b.color
+        bar.innerHTML = b.html
     }
 }
 
@@ -386,11 +479,9 @@ function update() {
         })
     };
     if (page == 7) {
-        //search progress tab: the same bars, but for the ordinal searched in the Search tab.
-        //its times are measured from that ordinal itself, so they read as "N after it"
-        const sp = searched_progress();
-        update_scratch_bars(sp.value, get_time_inv(sp.value) + st, sp.list, false);
-        update_search_progress_source();
+        //search progress tab: one bar per term, always showing the amount of steps to update it
+        update_search_progress_bars()
+        update_search_progress_source()
     }
     const modifiedElapsedSeconds = Math.max(0, (virtualElapsed + timeOffset) / 1000);
     let timeStatusText = "";
