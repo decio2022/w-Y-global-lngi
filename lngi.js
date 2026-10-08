@@ -248,45 +248,62 @@ function ordinal_suffix(n) {
     return n + (s[(v - 20) % 10] || s[v] || s[0])
 }
 
-//For the searched ordinal: the number of steps until each of its terms is updated.
-//The ladder is walked from the searched ordinal itself up to the next milestone,
-//and the first stage where a term differs is the update of that term.
-function term_updates(sp) {
+//For the searched ordinal, one entry per term: the lowest possible value and the maximum
+//value the term counts through until the term before it can increase, and the amount of
+//steps that takes. The ladder of stages between here and the next milestone is walked in
+//time order, and a term's window lasts as long as the term before it keeps its value.
+function term_progress(sp) {
     const ladder = sp.list
     if (!ladder.length) return []
 
-    const base = analysis_sequence().split(",").map(Number) //the searched ordinal's own terms
-    const total = ladder[ladder.length - 1][1]              //steps from it to the next milestone
-    const updates = [], done = new Set()
+    const stages = ladder.slice().reverse()    //[0] is where we are now, the last one is the next milestone
+    const total = ladder[ladder.length - 1][1] //steps from here to that milestone
 
-    //the deepest stage is the searched ordinal's own position (its shape may differ by a
-    //trailing term), so only the stages above it count as updates
-    for (let i = ladder.length - 2; i >= 0; i--) {
-        const stage = ladder[i][0].split(",").map(Number)
-        const steps = total - ladder[i][1]
-        for (let term = 2; term <= 50; term++) {
-            if (done.has(term)) continue
-            if (stage[term - 1] !== base[term - 1]) {
-                done.add(term)
-                updates.push({ term, steps, ord: ladder[i][0] })
-            }
-        }
+    function termValue(stage, term) {
+        const terms = stage.split(",")
+        return term <= terms.length ? Number(terms[term - 1]) : null //null: the term doesn't exist yet
     }
 
-    return updates.sort((a, b) => a.term - b.term)
+    const progress = []
+
+    for (let term = 2; term <= 50; term++) {
+        //the window lasts while the term before it keeps its value
+        const parent = termValue(stages[0][0], term - 1)
+        let end = stages.length - 1
+        for (let i = 1; i < stages.length; i++) {
+            if (termValue(stages[i][0], term - 1) !== parent) { end = i - 1; break }
+        }
+
+        let min = null, max = null, max_ord = null
+        for (let i = 0; i <= end; i++) {
+            const v = termValue(stages[i][0], term)
+            if (v === null) continue
+            if (min === null || v < min) min = v
+            if (max === null || v > max) { max = v; max_ord = stages[i][0] }
+        }
+        if (min === null) continue //the term never shows up before the term before it increases
+
+        //the term before it can increase at the next stage (for the 2nd term: at the milestone)
+        const steps = end + 1 < stages.length ? total - stages[end + 1][1] : total
+
+        progress.push({ term, min, max, steps, max_ord })
+    }
+
+    return progress
 }
 
-var searched_term_updates = { value: null, list: [] }
+var searched_term_progress = { value: null, list: [] }
 function searched_progress_terms() {
     const sp = searched_progress()
-    if (searched_term_updates.value !== sp.value) {
-        searched_term_updates = { value: sp.value, list: term_updates(sp) }
+    if (searched_term_progress.value !== sp.value) {
+        searched_term_progress = { value: sp.value, list: term_progress(sp) }
     }
-    return searched_term_updates.list
+    return searched_term_progress.list
 }
 
 //The search progress bars: one bar per term of the searched ordinal
-//(the first bar is the 2nd term), each showing how many steps it takes to update it.
+//(the first bar is the 2nd term), each showing the values that term counts through
+//(lowest → maximum) until the term before it can increase, and the steps that takes.
 //Unlike the live bars these never change, so the drawing is only redone when
 //the searched ordinal or the notation changes.
 var search_progress_cache = { key: null, bars: [] }
@@ -294,16 +311,23 @@ function search_progress_bars() {
     const sp = searched_progress()
     const key = `${sp.value}|${scratch_bar_display}`
     if (search_progress_cache.key !== key) {
-        const updates = searched_progress_terms()
-        const max = updates.reduce((m, u) => Math.max(m, u.steps), 0)
+        const progress = searched_progress_terms()
+        const max = progress.reduce((m, u) => Math.max(m, u.steps), 0)
 
         search_progress_cache = {
             key: key,
-            bars: updates.map(u => ({
-                html: `${safe_convert(u.ord, scratch_bar_display)} <small>(${ordinal_suffix(u.term)} term: ${u.steps} step${u.steps == 1 ? "" : "s"})</small>`,
-                width: `${max > 0 ? (u.steps / max) * 100 : 100}%`,
-                color: `hsl(${u.steps * 10},100%,90%)`
-            }))
+            bars: progress.map(u => {
+                const parent = u.term > 2 ? `the ${ordinal_suffix(u.term - 1)} term` : null
+                const steps = `${u.steps} step${u.steps == 1 ? "" : "s"}`
+                return {
+                    html: `${ordinal_suffix(u.term)} term: <b>${u.min} → ${u.max}</b> <small>(${steps}, until ${parent ? parent + " can increase" : "the next milestone"})</small>`,
+                    title: `${ordinal_suffix(u.term)} term counts from ${u.min} up to ${u.max}` +
+                        (u.max > u.min ? ` (at ${safe_convert(u.max_ord, scratch_bar_display)})` : "") +
+                        `, ${parent ? `after ${steps} ${parent} can increase` : `${steps} before the next milestone`}`,
+                    width: `${max > 0 ? (u.steps / max) * 100 : 100}%`,
+                    color: `hsl(${u.steps * 10},100%,90%)`
+                }
+            })
         }
     }
     return search_progress_cache.bars
@@ -317,9 +341,10 @@ function update_search_progress_bars() {
         const b = bars[i]
 
         if (!b) {
-            //terms that don't change before the next milestone have no bar
+            //terms that don't get updated before the next milestone have no bar
             bar.style.visibility = "hidden"
             bar.innerHTML = ""
+            bar.title = ""
             continue
         }
 
@@ -327,6 +352,7 @@ function update_search_progress_bars() {
         bar.style.width = b.width
         bar.style.backgroundColor = b.color
         bar.innerHTML = b.html
+        bar.title = b.title
     }
 }
 
@@ -460,6 +486,11 @@ function update() {
     document.getElementById("main_lngi_Content").innerHTML = `<i>${u[2]}</i>`
     document.getElementById("main_lngi_bar").innerHTML = `${u[0]} to next ordinal (${u[1]} left)`
     document.getElementById("tps").innerHTML = `${tps.toFixed(1)} tps`
+    //if the browser restored a typed search after the page loaded, catch up with it
+    const search_input_el = document.getElementById("search_input")
+    if (search_input_el && typeof search_time == "function" && search_input_el.value != last_search_input) {
+        search_time()
+    }
     if (page == 3 && sync_mountain.checked) { document.getElementById("input").value = trimStringList(u[2], MaxYTerms.valueAsNumber) }
     if (page == 0) {
         //the analysis part shows the sequence searched in the Search tab (1,1 if there's none)

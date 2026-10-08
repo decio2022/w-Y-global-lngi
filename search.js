@@ -209,10 +209,15 @@ var searched_ordinal = null
 //its value, used by the search progress tab (the value of 1,1 is 2)
 var searched_value = null
 
+//the text of the search box that search_time() last looked at, so the app can
+//notice when the browser restores a typed value after a reload
+var last_search_input = null
+
 function search_time(x = document.getElementById("search_input").value) {
     //only a call coming from the Search tab input itself (no argument passed)
     //updates the sequence shown in the analysis part
     var fromSearchTab = arguments.length == 0
+    last_search_input = document.getElementById("search_input").value
     if (fromSearchTab) {
         searched_ordinal = null
         searched_value = null
@@ -220,6 +225,8 @@ function search_time(x = document.getElementById("search_input").value) {
 
     var t = String(x ?? "").trim()
     var r = ""
+
+    if (fromSearchTab) localStorage.setItem("lngi_searched_input", t)
 
     if (t == "") {
         //null sequence: the analysis part falls back to 1,1
@@ -318,8 +325,14 @@ function search_time(x = document.getElementById("search_input").value) {
     return [r,-Math.log2(i)]
 }
 
-//browsers remember what was typed in the input after a reload, so restore it here too
-window.addEventListener("DOMContentLoaded", () => search_time())
+//the search box is restored and re-read here, because browsers bring back what was
+//typed only after the page loaded, which used to leave the app showing 1,1
+window.addEventListener("DOMContentLoaded", () => {
+    const input = document.getElementById("search_input")
+    const saved = localStorage.getItem("lngi_searched_input")
+    if (input && saved) input.value = saved
+    search_time()
+})
 
 function go_2048() {
     document.getElementById('sex').value = '1,2,4,8,16,32,64,128,256,512,1024,2048'
