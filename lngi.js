@@ -248,45 +248,105 @@ function ordinal_suffix(n) {
     return n + (s[(v - 20) % 10] || s[v] || s[0])
 }
 
-//For the searched ordinal, one entry per term: the lowest possible value and the maximum
-//value the term counts through until the term before it can increase, and the amount of
-//steps that takes. The ladder of stages between here and the next milestone is walked in
-//time order, and a term's window lasts as long as the term before it keeps its value.
-function term_progress(sp) {
-    const ladder = sp.list
-    if (!ladder.length) return []
+//The path the searched ordinal walks to its next milestone, as the display shows it:
+//the ladder stages, refined with the fundamental-sequence chain of each stage
+//(that's the "1,2 -> 1,2,1,2,1,2 -> 1,2,2 -> 1,2,2,2 -> ..." growth).
+//Every entry is [sequence, ladder step]; the chains only run for short sequences,
+//so this stays cheap.
+function fine_path(sp) {
+    const stages = sp.list.slice().reverse()   //time order: the searched ordinal first
+    if (!stages.length) return []
 
-    const stages = ladder.slice().reverse()    //[0] is where we are now, the last one is the next milestone
-    const total = ladder[ladder.length - 1][1] //steps from here to that milestone
+    const path = [[stages[0][0], stages[0][1]]]
+    let calls = 0
 
-    function termValue(stage, term) {
-        const terms = stage.split(",")
-        return term <= terms.length ? Number(terms[term - 1]) : null //null: the term doesn't exist yet
+    for (let i = 1; i < stages.length; i++) {
+        const A = stages[i - 1][0]
+        const B = stages[i][0]
+        const prev = stages[i - 1][1]          //step of the stage below this segment
+        let list = [A]
+
+        if (B.split(",").length <= 6) {
+            //deep first: fs(B, e) shrinks towards A as e grows
+            const chain = []
+            for (let e = 8; e >= 0 && calls < 120; e--) {
+                let x
+                try { x = Y_Sequence.fs(B, e); calls++ } catch (err) { break }
+                const c = Y_Sequence.cmp(x, A)
+                if (c < 0) continue   //not there yet, keep going down
+                if (c == 0) break     //that's the previous stage itself
+                if (x.split(",").length > 50) break
+                chain.push(x)
+            }
+            for (let c = chain.length - 1; c >= 0; c--) list.push(chain[c])
+        }
+        list.push(B)
+
+        //the sequence also grows by appending 1s, as long as its last term is 1
+        for (let j = 0; j < list.length; j++) {
+            const x = list[j]
+            //the last entry is the stage itself, the chain sits just below it
+            if (j > 0) path.push([x, x === B ? stages[i][1] : prev])
+            const t = x.split(",")
+            if (t[t.length - 1] !== "1") continue
+            for (let k = 1; k <= 6; k++) {
+                const cand = x + ",1".repeat(k)
+                if (j + 1 < list.length && Y_Sequence.cmp(cand, list[j + 1]) >= 0) break
+                path.push([cand, x === B ? stages[i][1] : prev])
+            }
+        }
     }
 
+    return path
+}
+
+//For the searched ordinal, one entry per term: the lowest possible value and the maximum
+//value the term takes until the term before it can increase, walking the display path.
+//A term that isn't there yet is created as 1 (that's how the sequence grows).
+function term_progress(sp) {
+    const stages = sp.list.slice().reverse()   //time order: the searched ordinal first
+    const path = fine_path(sp)
+    if (!path.length || !stages.length) return []
+
+    const total = stages[0][1]     //ladder steps of the searched ordinal (counted down to the milestone)
     const progress = []
 
     for (let term = 2; term <= 50; term++) {
-        //the window lasts while the term before it keeps its value
-        const parent = termValue(stages[0][0], term - 1)
-        let end = stages.length - 1
-        for (let i = 1; i < stages.length; i++) {
-            if (termValue(stages[i][0], term - 1) !== parent) { end = i - 1; break }
+        let born = null, min = null, max = null, max_ord = null, steps = null, end_ord = null
+
+        for (let i = 0; i < path.length; i++) {
+            const t = path[i][0].split(",").map(Number)
+
+            if (born === null) {
+                //the term exists once the sequence is long enough; it is created as 1
+                if (t.length >= term) { born = i; min = max = t[term - 1]; max_ord = path[i][0] }
+                continue
+            }
+
+            const parent_at_birth = path[born][0].split(",").map(Number)[term - 2]
+
+            //the window ends when the term before it can increase
+            if (term > 2 && t.length >= term - 1 && t[term - 2] > parent_at_birth) {
+                steps = total - path[i][1]
+                end_ord = path[i][0]
+                break
+            }
+
+            //a term only counts on the steps where the sequence is long enough to show it
+            if (t.length >= term) {
+                if (t[term - 1] < min) min = t[term - 1]
+                if (t[term - 1] > max) { max = t[term - 1]; max_ord = path[i][0] }
+            }
         }
 
-        let min = null, max = null, max_ord = null
-        for (let i = 0; i <= end; i++) {
-            const v = termValue(stages[i][0], term)
-            if (v === null) continue
-            if (min === null || v < min) min = v
-            if (max === null || v > max) { max = v; max_ord = stages[i][0] }
+        //one slot per term, so that a bar always belongs to the same term
+        if (born === null) { progress.push(null); continue }
+        if (min === max && steps === 0) { progress.push(null); continue }   //nothing happens with it
+        if (steps === null) {
+            steps = total                                  //no earlier stop: the next milestone
+            end_ord = stages[stages.length - 1][0]
         }
-        if (min === null) continue //the term never shows up before the term before it increases
-
-        //the term before it can increase at the next stage (for the 2nd term: at the milestone)
-        const steps = end + 1 < stages.length ? total - stages[end + 1][1] : total
-
-        progress.push({ term, min, max, steps, max_ord })
+        progress.push({ term, min, max, steps, max_ord: max_ord || path[born][0], end_ord })
     }
 
     return progress
@@ -302,8 +362,8 @@ function searched_progress_terms() {
 }
 
 //The search progress bars: one bar per term of the searched ordinal
-//(the first bar is the 2nd term), each showing the values that term counts through
-//(lowest → maximum) until the term before it can increase, and the steps that takes.
+//(the first bar is the 2nd term). Each one shows the values that term runs through,
+//from where it starts up to the moment the term before it can increase.
 //Unlike the live bars these never change, so the drawing is only redone when
 //the searched ordinal or the notation changes.
 var search_progress_cache = { key: null, bars: [] }
@@ -312,18 +372,20 @@ function search_progress_bars() {
     const key = `${sp.value}|${scratch_bar_display}`
     if (search_progress_cache.key !== key) {
         const progress = searched_progress_terms()
-        const max = progress.reduce((m, u) => Math.max(m, u.steps), 0)
+        const max = progress.reduce((m, u) => Math.max(m, u ? u.steps : 0), 0)
 
         search_progress_cache = {
             key: key,
             bars: progress.map(u => {
-                const parent = u.term > 2 ? `the ${ordinal_suffix(u.term - 1)} term` : null
-                const steps = `${u.steps} step${u.steps == 1 ? "" : "s"}`
+                if (!u) return null
+                const range = u.min == u.max ? `${u.min}` : `${u.min} → ${u.max}`
+                const until = u.term > 2 ? `until the ${ordinal_suffix(u.term - 1)} term can increase` : `until the next milestone`
                 return {
-                    html: `${ordinal_suffix(u.term)} term: <b>${u.min} → ${u.max}</b> <small>(${steps}, until ${parent ? parent + " can increase" : "the next milestone"})</small>`,
-                    title: `${ordinal_suffix(u.term)} term counts from ${u.min} up to ${u.max}` +
-                        (u.max > u.min ? ` (at ${safe_convert(u.max_ord, scratch_bar_display)})` : "") +
-                        `, ${parent ? `after ${steps} ${parent} can increase` : `${steps} before the next milestone`}`,
+                    html: `${ordinal_suffix(u.term)} term: <b>${range}</b> <small>(${u.steps} step${u.steps == 1 ? "" : "s"}, ${until})</small>`,
+                    title: `${ordinal_suffix(u.term)} term: ${range}` +
+                        (u.max > u.min ? ` (it reaches ${u.max} at ${safe_convert(u.max_ord, scratch_bar_display)})` : "") +
+                        `, ${u.steps} step${u.steps == 1 ? "" : "s"} ${until}` +
+                        (u.end_ord ? `, at ${safe_convert(u.end_ord, scratch_bar_display)}` : ""),
                     width: `${max > 0 ? (u.steps / max) * 100 : 100}%`,
                     color: `hsl(${u.steps * 10},100%,90%)`
                 }
