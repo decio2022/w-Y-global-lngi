@@ -533,7 +533,7 @@ class Y_Sequence {
       //Limited to n<=10
       function expandmultilimited(s, nstring, dstring,) {
          var result = s;
-         for (var i of nstring.split(",")) result = expand(toSequence(result.split(itemSeparatorRegex).map(e => { return Number(e) })), Math.min(i, 10), dstring.split(itemSeparatorRegex).map(e => { return Number(e) })).toString();
+         for (var i of nstring.split(",")) result = expand(toSequence(result.split(itemSeparatorRegex).map(e => { return Number(e) })), Math.min(i, 1000), dstring.split(itemSeparatorRegex).map(e => { return Number(e) })).toString();
          return result;
       }
       var mt = ""
