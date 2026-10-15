@@ -295,7 +295,7 @@ function get_time(t) {
     return interpolateLngiTimeline(t, "time", "value");
 }
 
-function get_time_inv(n) {
+function get_time_inv(t) {
     return interpolateLngiTimeline(t, "value", "time");
 }
 
