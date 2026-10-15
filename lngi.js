@@ -258,12 +258,45 @@ function num_to_lngi(m) {
     return ntl(m)
 }
 
+const LNGI_DAY_MS = 24 * 60 * 60 * 1000;
+const LNGI_STAGE_VALUES = [
+    3.7578125,       // 1,2,4,8,12
+    3.76171875,      // 1,2,4,8,12,16
+    3.763671875,     // 1,2,4,8,12,16,20
+    3.7646484375,    // 1,2,4,8,12,16,20,24
+    3.76513671875,   // 1,2,4,8,12,16,20,24,28
+    3.765380859375,  // 1,2,4,8,12,16,20,24,28,32
+    3.7655029296875, // 1,2,4,8,12,16,20,24,28,32,36
+    3.76556396484375 // 1,2,4,8,12,16,20,24,28,32,36,40
+];
+const LNGI_TIMELINE = [
+    { time: 0, value: 2 },
+    ...LNGI_STAGE_VALUES.map((value, index) => ({
+        time: 100 * (index + 1) * (index + 2) / 2 * LNGI_DAY_MS,
+        value
+    }))
+];
+
+function interpolateLngiTimeline(input, fromKey, toKey) {
+    if (input <= LNGI_TIMELINE[0][fromKey]) {
+        return LNGI_TIMELINE[0][toKey];
+    }
+    for (let i = 1; i < LNGI_TIMELINE.length; i++) {
+        const previous = LNGI_TIMELINE[i - 1];
+        const next = LNGI_TIMELINE[i];
+        if (input <= next[fromKey] || i === LNGI_TIMELINE.length - 1) {
+            const progress = (input - previous[fromKey]) / (next[fromKey] - previous[fromKey]);
+            return previous[toKey] + progress * (next[toKey] - previous[toKey]);
+        }
+    }
+}
+
 function get_time(t) {
-    return (Math.log10(1 + t / 864000) / 2 + 2)
+    return interpolateLngiTimeline(t, "time", "value");
 }
 
 function get_time_inv(n) {
-    return (10 ** ((n - 2) * 2) - 1) * 864000
+    return interpolateLngiTimeline(t, "value", "time");
 }
 
 function renderAnalysisPanels() {
