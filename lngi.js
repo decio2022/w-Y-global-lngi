@@ -162,26 +162,52 @@ function num_to_lngi(m) {
 //1,3,4,2,5,6 => 4.007999420166016
 //1,3,4,3 => 4.008056640625
 
-const upg1 = 3.00000003846372
-const upg2 = 3.00137462840000
+const LNGI_DAY_MS = 24 * 60 * 60 * 1000;
+const LNGI_STAGE_VALUES = [
+    3.7578125,       // 1,2,4,8,12
+    3.76171875,      // 1,2,4,8,12,16
+    3.763671875,     // 1,2,4,8,12,16,20
+    3.7646484375,    // 1,2,4,8,12,16,20,24
+    3.76513671875,   // 1,2,4,8,12,16,20,24,28
+    3.765380859375,  // 1,2,4,8,12,16,20,24,28,32
+    3.7655029296875, // 1,2,4,8,12,16,20,24,28,32,36
+    3.76556396484375 // 1,2,4,8,12,16,20,24,28,32,36,40
+];
 
-const exp = 13.036562
-const spd = 0.002001
+// Leg n lasts 100 * n days: cumulative days 100, 300, 600, ..., 3600.
+// Values are the existing num_to_lngi encoding, starting at 1,1 (value 2).
+const LNGI_TIMELINE = [
+    { time: 0, value: 2 },
+    ...LNGI_STAGE_VALUES.map((value, index) => ({
+        time: 100 * (index + 1) * (index + 2) / 2 * LNGI_DAY_MS,
+        value
+    }))
+];
 
-function get_time(t) {
-    var R = (Math.log10(1 + t / 864000) / 2 + 2)
-    if (R > upg1) {
-        R = (((R - upg1) / (upg2 - upg1) * spd) ** exp) * (upg2 - upg1) + upg1
+function interpolateLngiTimeline(input, fromKey, toKey) {
+    if (input <= LNGI_TIMELINE[0][fromKey]) {
+        return LNGI_TIMELINE[0][toKey];
     }
-    return R
+
+    for (let i = 1; i < LNGI_TIMELINE.length; i++) {
+        const previous = LNGI_TIMELINE[i - 1];
+        const next = LNGI_TIMELINE[i];
+        // Continue at the last leg's rate after 40, rather than freezing the LNGI.
+        if (input <= next[fromKey] || i === LNGI_TIMELINE.length - 1) {
+            const progress = (input - previous[fromKey]) / (next[fromKey] - previous[fromKey]);
+            return previous[toKey] + progress * (next[toKey] - previous[toKey]);
+        }
+    }
 }
 
+// Elapsed milliseconds since st -> ordinal value, with continuous progress.
+function get_time(t) {
+    return interpolateLngiTimeline(t, "time", "value");
+}
+
+// Ordinal value -> elapsed milliseconds, also used by searches and countdowns.
 function get_time_inv(n) {
-    if (n > upg1) {
-        n = (((n - upg1) / (upg2 - upg1)) ** (1/exp)) / spd * (upg2 - upg1) + upg1
-    }
-    var S = (10 ** ((n - 2) * 2) - 1) * 864000
-    return S
+    return interpolateLngiTimeline(n, "value", "time");
 }
 
 function renderAnalysisPanels() {
