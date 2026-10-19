@@ -316,6 +316,11 @@
             The last column counts how many times that row's record has been
             increased &mdash; every bigger sequence that took it, first save
             included (a rewind drop empties the record but keeps its count).
+            Saves from before this counter existed aren't left behind: their
+            increases are rebuilt automatically by replaying the whole
+            timeline in the background until every saved record has been
+            caught up with, so an old save shows the increases that really
+            happened (the flood of them leading up to <i>1,2,4</i> included).
         </div>
         <div class="highest-summary">Lengths with a saved sequence: <span id="highest_terms_count">0 / 25</span>
             &middot; Total increases: <span id="highest_terms_increases">0</span></div>

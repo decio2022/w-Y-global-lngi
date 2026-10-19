@@ -26,6 +26,11 @@ lexicographically while time flows forward):
   * Sending the clock backwards with the Time Control drops the records of
     lengths the rewound-to sequence can no longer reach (those were earned
     in a future that no longer exists); lengths it still reaches keep theirs.
+  * Increase counts are rebuilt for saves that predate the counter: the whole
+    timeline is replayed from the start in the background until the replayed
+    records catch up with every saved one, so an old save shows the increases
+    that really happened (e.g. all the ones leading up to 1,2,4) instead of
+    placeholders.
 
 Records are stored in localStorage (array of comma separated strings), so they
 survive a reload. Terms are kept as decimal strings because a single term can
@@ -37,6 +42,12 @@ start at length 2.
 const HIGHEST_TERMS_TRACKED = 25; // rows: length 2 .. 26 (length 1 is always just 1)
 const HIGHEST_TERMS_KEY = "lngi_app_highest_terms";
 const HIGHEST_TERMS_COUNTS_KEY = "lngi_app_highest_terms_increases";
+// Written next to the counts once they are trustworthy: counts born with the
+// counter, or counts rebuilt from the timeline (see the backfill block
+// below). A save that has records but no marker predates counting and gets
+// rebuilt on load.
+const HIGHEST_TERMS_COUNTS_VER_KEY = "lngi_app_highest_terms_increases_v";
+const HIGHEST_TERMS_COUNTS_VER = "1";
 const HIGHEST_TERMS_DECIMAL = /^\d+$/;
 // A valid saved record: decimal terms only, e.g. "1,2,4,8".
 const HIGHEST_TERMS_RECORD = /^\d+(,\d+)*$/;
@@ -46,6 +57,12 @@ const HIGHEST_TERMS_RECORD = /^\d+(,\d+)*$/;
 const HIGHEST_SCAN_STEP = 0.00005; // minimum gap between samples: any state that lives longer than this is always caught
 const HIGHEST_SCAN_MAX = 20000;     // hard cap on samples per jump (absurd jumps degrade gracefully)
 const HIGHEST_SCAN_BUDGET_MS = 10;  // background work per animation frame while a scan runs
+// The backfill replay (rebuilding the increases of a pre-counter save) gets
+// its own budget: it is a one-off walk of the whole timeline that ends as
+// soon as every saved record has been caught up with, so it may jank a bit
+// harder while it runs.
+const HIGHEST_BACKFILL_BUDGET_MS = 25;
+const HIGHEST_BACKFILL_MAX_STEPS = 100000; // safety cap — far beyond the entire timeline
 
 // Highest sequence ever seen per length. Index 0 is the 2-term record
 // (e.g. "1,2"), index 24 is the 26-term record. null = no record yet.
@@ -65,6 +82,16 @@ var highestTermsScanQueue = [];
 // Set when time went backwards; the next tracked sequence drops the records
 // of lengths it can no longer reach.
 var highestTermsRewindPending = false;
+// Whether the loaded increase counts can be trusted as they are. A save that
+// predates the counter carries records but no real counts: those are rebuilt
+// by replaying the timeline (backfill block below).
+var highestTermsCountsTrusted = true;
+// Armed while a loaded save still needs that rebuild; the first tracked
+// frame (the one that knows the clock) starts it.
+var highestTermsBackfillPending = false;
+// The running rebuild, or null: { recs, counts, unsat, u, lastSeq, steps,
+// dirty } — recs/counts are the replay's own temporary copies.
+var highestTermsBackfill = null;
 
 function compare_highest_terms(a, b) {
     try {
@@ -137,9 +164,26 @@ function load_highest_terms() {
         console.error("Failed to load highest terms:", e);
     }
 
+    // Decide whether the counts that just loaded are real. Counts are only
+    // marked trustworthy when they were born with the counter or were
+    // already rebuilt; a save with records but no marker predates counting,
+    // so its increases (everything that happened up to e.g. 1,2,4) are
+    // rebuilt by replaying the timeline, starting on the first tracked frame.
+    const hadRecords = highestTerms.some(value => value !== null);
+    let marked = false;
+    try {
+        marked = localStorage.getItem(HIGHEST_TERMS_COUNTS_VER_KEY) === HIGHEST_TERMS_COUNTS_VER;
+    } catch (e) {
+        console.error("Failed to read the highest terms count marker:", e);
+    }
+    highestTermsCountsTrusted = !hadRecords || marked;
+    highestTermsBackfillPending = hadRecords && !marked;
+    highestTermsBackfill = null; // (re)loading discards any rebuild in flight
+
     // Migration / self-healing: a record without any count (saved before
     // increase counting existed, or lost alongside it) was increased at
-    // least once — seed it with 1 so old saves don't show 0s everywhere.
+    // least once — seed it with 1 as a placeholder so old saves don't show
+    // 0s while the rebuild below fills in the real increases.
     let seeded = false;
     for (let i = 0; i < HIGHEST_TERMS_TRACKED; i++) {
         if (highestTerms[i] !== null && !(highestTermsIncreases[i] > 0)) {
@@ -154,27 +198,44 @@ function save_highest_terms() {
     try {
         localStorage.setItem(HIGHEST_TERMS_KEY, JSON.stringify(highestTerms));
         // Counts only ever change together with a record, so both are saved
-        // here; saving one without the other would desync them.
+        // here; saving one without the other would desync them. The version
+        // marker rides along only with counts that are real — untrusted
+        // (to-be-rebuilt) saves stay unmarked so the rebuild runs again on
+        // the next load if this one never finishes.
         localStorage.setItem(HIGHEST_TERMS_COUNTS_KEY, JSON.stringify(highestTermsIncreases));
+        if (highestTermsCountsTrusted) {
+            localStorage.setItem(HIGHEST_TERMS_COUNTS_VER_KEY, HIGHEST_TERMS_COUNTS_VER);
+        }
     } catch (e) {
         console.error("Failed to save highest terms:", e);
     }
 }
 
-// Raise record #i to `prefix` when it is strictly bigger (or missing).
-// Every actual raise — including the very first save for that length —
-// counts as one increase.
-function raise_record(i, prefix) {
-    if (highestTerms[i] !== null && compare_term_sequences(prefix, highestTerms[i]) <= 0) {
+// Raise the record at index `i` to `prefix` when it is strictly bigger (or
+// missing) — the shared rule for live records and for a backfill replay's
+// temporary records. Every actual raise — including the very first save for
+// that length — counts as one increase.
+function raise_record_into(recs, counts, i, prefix) {
+    if (recs[i] !== null && compare_term_sequences(prefix, recs[i]) <= 0) {
         return false;
     }
-    highestTerms[i] = prefix;
-    highestTermsIncreases[i] = (highestTermsIncreases[i] || 0) + 1;
+    recs[i] = prefix;
+    counts[i] = (counts[i] || 0) + 1;
     return true;
 }
 
-// Wipe every saved sequence, its increase counts and any pending jump scan
-// (used by the "Reset everything" button).
+// Raise a live record (see above). Notifies a running backfill so it also
+// catches up with the new value.
+function raise_record(i, prefix) {
+    if (!raise_record_into(highestTerms, highestTermsIncreases, i, prefix)) {
+        return false;
+    }
+    if (highestTermsBackfill !== null) highest_terms_backfill_observe_raise(i);
+    return true;
+}
+
+// Wipe every saved sequence, its increase counts and any pending jump scan or
+// backfill (used by the "Reset everything" button).
 function highest_terms_reset() {
     highestTerms = new Array(HIGHEST_TERMS_TRACKED).fill(null);
     highestTermsIncreases = new Array(HIGHEST_TERMS_TRACKED).fill(0);
@@ -183,18 +244,25 @@ function highest_terms_reset() {
     highestTermsLastTime = null;
     highestTermsScanQueue = [];
     highestTermsRewindPending = false;
+    // A wiped game starts fresh: future counts are born real, so nothing
+    // needs rebuilding and the next save re-marks them as trusted.
+    highestTermsBackfill = null;
+    highestTermsBackfillPending = false;
+    highestTermsCountsTrusted = true;
     try {
         localStorage.removeItem(HIGHEST_TERMS_KEY);
         localStorage.removeItem(HIGHEST_TERMS_COUNTS_KEY);
+        localStorage.removeItem(HIGHEST_TERMS_COUNTS_VER_KEY);
     } catch (e) {
         console.error("Failed to clear highest terms:", e);
     }
 }
 
-// Fold one sequence into the records (records only — does NOT touch the
-// "current" column, and never drops anything). Returns true when a record
-// changed. Used by the per-frame tracker and by the forward-jump scan.
-function highest_terms_absorb(seq) {
+// Fold one sequence into the given record/count arrays (records only — never
+// touches the "current" column, and never drops anything). Returns a bitmask
+// of the rows that were raised. Used by the per-frame tracker, by the
+// forward-jump scan and by the backfill replay.
+function highest_terms_absorb_into(recs, counts, seq) {
     const terms = (typeof seq === "string" && seq.length > 0) ? seq.split(",") : [];
 
     let reachable = 0;
@@ -202,16 +270,22 @@ function highest_terms_absorb(seq) {
         reachable++;
     }
 
-    let changed = false;
+    let raised = 0;
     for (let i = 0; i < HIGHEST_TERMS_TRACKED; i++) {
         const n = i + 2;
         if (n > reachable) continue;
         const prefix = terms.slice(0, n).map(t => t.trim()).join(",");
-        if (raise_record(i, prefix)) {
-            changed = true;
+        if (raise_record_into(recs, counts, i, prefix)) {
+            raised |= (1 << i);
         }
     }
-    return changed;
+    return raised;
+}
+
+// Fold one sequence into the live records. Returns true when a record
+// changed.
+function highest_terms_absorb(seq) {
+    return highest_terms_absorb_into(highestTerms, highestTermsIncreases, seq) !== 0;
 }
 
 // Watch the simulated clock for jumps. Called every frame BEFORE tracking.
@@ -232,6 +306,11 @@ function highest_terms_check_time(simulatedElapsed) {
     highestTermsLastTime = simulatedElapsed;
 
     highest_terms_scan_step();
+
+    if (highestTermsBackfillPending && highestTermsLastTime !== null) {
+        highest_terms_backfill_begin();
+    }
+    highest_terms_backfill_step();
 }
 
 // Queue a background scan of every distinct sequence between two moments of
@@ -287,6 +366,133 @@ function highest_terms_scan_step() {
     if (changed) save_highest_terms();
 }
 
+// ---- Rebuilding the increases of a save that predates counting ----
+//
+// An old save holds its records, but the increases that earned them happened
+// before the counter existed (and before jumps were scanned), so they were
+// never stored. To recover them, the whole timeline is replayed from the very
+// start with empty temporary records: every raise the replay counts is an
+// increase that really happened, in the order playing through would have
+// produced them — including every sequence a forward jump passed, so the
+// rebuilt counts reach values like the flood of increases leading up to
+// 1,2,4. The replay stops as soon as the temporary records have caught up
+// with every saved record (for a save that never rewound, that is exactly the
+// moment its last record was earned); the rebuilt counts then replace the
+// placeholders and the save is marked trusted, so later loads never rebuild
+// again.
+
+// Start a rebuild: empty temporary records, replay from the start of the
+// clock. Called from the first tracked frame (get_time must exist by then).
+function highest_terms_backfill_begin() {
+    highestTermsBackfillPending = false;
+    try {
+        const unsat = new Set();
+        for (let i = 0; i < HIGHEST_TERMS_TRACKED; i++) {
+            if (highestTerms[i] !== null) unsat.add(i);
+        }
+        if (unsat.size === 0) {
+            highest_terms_backfill_finish();
+            return;
+        }
+        highestTermsBackfill = {
+            recs: new Array(HIGHEST_TERMS_TRACKED).fill(null),
+            counts: new Array(HIGHEST_TERMS_TRACKED).fill(0),
+            unsat: unsat,
+            u: get_time(0), // nothing exists before the clock starts
+            lastSeq: null,
+            steps: 0,
+            dirty: false,
+        };
+    } catch (e) {
+        console.error("Failed to start the highest terms backfill:", e);
+        highest_terms_backfill_finish();
+    }
+}
+
+// The live tracker raised a record while the replay runs: the replay must
+// now also reach the new value (unless it has already passed it).
+function highest_terms_backfill_observe_raise(i) {
+    const bf = highestTermsBackfill;
+    if (bf === null) return;
+    bf.unsat.add(i);
+    highest_terms_backfill_check_crossing(i);
+}
+
+// The live tracker dropped a record (rewind): nothing left to catch up with.
+function highest_terms_backfill_observe_drop(i) {
+    const bf = highestTermsBackfill;
+    if (bf !== null) bf.unsat.delete(i);
+}
+
+// If the replay's record for row i has caught up with the live one, commit
+// the replayed count as that row's real increase count.
+function highest_terms_backfill_check_crossing(i) {
+    const bf = highestTermsBackfill;
+    if (bf === null || !bf.unsat.has(i)) return;
+    const live = highestTerms[i];
+    if (live === null) {
+        bf.unsat.delete(i);
+        return;
+    }
+    if (bf.recs[i] !== null && compare_term_sequences(bf.recs[i], live) >= 0) {
+        highestTermsIncreases[i] = bf.counts[i];
+        bf.unsat.delete(i);
+        bf.dirty = true;
+    }
+}
+
+// Wrap up the rebuild: the counts are now as real as the timeline can make
+// them, so the save counts as trusted from here on.
+function highest_terms_backfill_finish() {
+    highestTermsBackfill = null;
+    highestTermsBackfillPending = false;
+    highestTermsCountsTrusted = true;
+    save_highest_terms();
+}
+
+// Replay a slice of the timeline per animation frame, within its own time
+// budget. Yields to the jump scan while one is draining, so live recording
+// always gets a frame's time first. Repeated samples of an unchanged sequence
+// are skipped — an unchanged sequence can't raise anything.
+function highest_terms_backfill_step() {
+    if (highestTermsBackfill === null) return;
+    if (highestTermsScanQueue.length > 0) return;
+
+    const bf = highestTermsBackfill;
+    const now = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
+    const deadline = now() + HIGHEST_BACKFILL_BUDGET_MS;
+
+    try {
+        while (bf.unsat.size > 0 && bf.steps <= HIGHEST_BACKFILL_MAX_STEPS) {
+            const seq = num_to_lngi(bf.u)[0];
+            if (seq !== bf.lastSeq) {
+                bf.lastSeq = seq;
+                const raised = highest_terms_absorb_into(bf.recs, bf.counts, seq);
+                if (raised !== 0) {
+                    for (let i = 0; i < HIGHEST_TERMS_TRACKED; i++) {
+                        if ((raised & (1 << i)) !== 0) highest_terms_backfill_check_crossing(i);
+                    }
+                }
+            }
+            bf.u += HIGHEST_SCAN_STEP;
+            bf.steps++;
+            if (now() >= deadline) break;
+        }
+    } catch (e) {
+        // Never let a bad sample take down the update loop.
+        console.error("Highest terms backfill failed:", e);
+    }
+
+    if (bf.unsat.size === 0 || bf.steps > HIGHEST_BACKFILL_MAX_STEPS) {
+        highest_terms_backfill_finish();
+    } else if (bf.dirty) {
+        // Persist the rows already caught up even if the walk is interrupted
+        // (an interrupted rebuild starts over from scratch next load anyway).
+        bf.dirty = false;
+        save_highest_terms();
+    }
+}
+
 // Feed the current ω-Y sequence (raw string, e.g. "1,2,4,8,16") to the tracker.
 // Called every frame from update(), whichever tab is open. `seq` is null when
 // there is no sequence to show (the clock has not started yet).
@@ -313,8 +519,8 @@ function track_highest_terms(seq) {
 
     // While a forward-jump scan is still filling the gap, record-raising is
     // left to the scan: it walks every skipped sequence in chronological
-    // order (and finishes with this frame's destination), so each increase
-    // is counted the same way playing through would have counted it. This
+    // order (and finishes with this frame's destination), so each increase is
+    // counted the same way playing through would have counted it. This
     // frame only keeps the "current" column fresh.
     const scanPending = highestTermsScanQueue.length > 0;
 
@@ -336,6 +542,7 @@ function track_highest_terms(seq) {
             // The record goes away, but its increase count is history and
             // stays saved.
             highestTerms[i] = null;
+            if (highestTermsBackfill !== null) highest_terms_backfill_observe_drop(i);
             changed = true;
         }
     }
