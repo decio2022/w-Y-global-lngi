@@ -121,20 +121,33 @@ function load_highest_terms() {
 
     try {
         const saved = localStorage.getItem(HIGHEST_TERMS_KEY);
-        if (!saved) return;
-        const parsed = JSON.parse(saved);
-        if (!Array.isArray(parsed)) return;
-
-        highestTerms = new Array(HIGHEST_TERMS_TRACKED).fill(null);
-        for (let i = 0; i < HIGHEST_TERMS_TRACKED && i < parsed.length; i++) {
-            const value = parsed[i];
-            if (is_valid_highest_record(value, i + 2)) {
-                highestTerms[i] = value;
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) {
+                highestTerms = new Array(HIGHEST_TERMS_TRACKED).fill(null);
+                for (let i = 0; i < HIGHEST_TERMS_TRACKED && i < parsed.length; i++) {
+                    const value = parsed[i];
+                    if (is_valid_highest_record(value, i + 2)) {
+                        highestTerms[i] = value;
+                    }
+                }
             }
         }
     } catch (e) {
         console.error("Failed to load highest terms:", e);
     }
+
+    // Migration / self-healing: a record without any count (saved before
+    // increase counting existed, or lost alongside it) was increased at
+    // least once — seed it with 1 so old saves don't show 0s everywhere.
+    let seeded = false;
+    for (let i = 0; i < HIGHEST_TERMS_TRACKED; i++) {
+        if (highestTerms[i] !== null && !(highestTermsIncreases[i] > 0)) {
+            highestTermsIncreases[i] = 1;
+            seeded = true;
+        }
+    }
+    if (seeded) save_highest_terms();
 }
 
 function save_highest_terms() {
