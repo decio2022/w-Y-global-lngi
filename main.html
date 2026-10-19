@@ -303,10 +303,16 @@
             Term 1 is always 1 (it can never grow), so it is not tracked.<br>
             While the main sequence still starts with a saved record &mdash; e.g. the
             record <i>1,2,3,4,5,6,7</i> while the main sequence is <i>1,2,3,4,5,6,7,8</i>
-            &mdash; that record keeps being saved. As soon as the main sequence becomes
-            too short to contain it &mdash; moving to a new branch like <i>1,2,4</i>, or
-            rewinding with the Time Control &mdash; the record is dropped. Otherwise a
-            record is only beaten by a bigger sequence, never by travelling back in time.
+            &mdash; that record keeps being saved. It is only replaced once a bigger
+            sequence reaches that length (the <i>1,2,4</i> branch replaces it term by
+            term as it grows), never because the main sequence is short right now.<br>
+            Jumping ahead with the Time Control (&ldquo;Go to&rdquo;, &ldquo;Go to
+            specific time&rdquo;, the +time buttons) records every sequence passed on
+            the way &mdash; going from <i>1,1</i> straight to <i>1,2,4</i> still saves
+            every sequence of 3+ terms reached before <i>1,2,4</i>. Sending the clock
+            backwards drops only the lengths the rewound-to sequence can no longer
+            reach; everything else is only beaten by a bigger sequence, never by
+            time travel.
         </div>
         <div class="highest-summary">Lengths with a saved sequence: <span id="highest_terms_count">0 / 25</span></div>
         <div id="highest_terms_container">

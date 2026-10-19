@@ -563,9 +563,11 @@ function update() {
 
     document.getElementById("main_lngi_Content").innerHTML = `<i>${u[2]}</i>`
     // Feed the displayed sequence to the Highest terms tracker (runs on every
-    // tab, so records are kept even while the tab is closed). The tracker
-    // itself handles both time travel and new sequence branches: records for
-    // lengths the sequence no longer reaches are dropped there.
+    // tab, so records are kept even while the tab is closed). The time check
+    // must run first: it queues the gap of any forward jump (Go to / Go to
+    // specific time / +time) so every skipped sequence still gets recorded in
+    // the background, and arms the rewind drop when the clock went backwards.
+    highest_terms_check_time(virtualElapsed + timeOffset)
     track_highest_terms(Array.isArray(u) ? u[2] : null)
     document.getElementById("main_lngi_bar").innerHTML = `${u[0]} to next ordinal (${u[1]} left)`
     updatePauseIndicator();
