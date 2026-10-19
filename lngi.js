@@ -72,6 +72,54 @@ if (speedInput && offsetInput) {
         timeOffset = isNaN(val) ? 0 : val * 1000;
     });
 }
+
+// "Reset everything" button (Time Control panel): sends the whole game back
+// to its fresh-start state and leaves it automatically paused, so nothing
+// runs away after the reset.
+function resetEverything() {
+    const confirmed = window.confirm(
+        "Reset everything to the start?\n\n" +
+        "• Time progress (Virtual Elapsed), time offset and time speed\n" +
+        "• Milestone multiplier\n" +
+        "• All saved highest sequences\n\n" +
+        "The game will be paused automatically.\n" +
+        "Display settings and the saved layout are kept."
+    );
+    if (!confirmed) return;
+
+    // Fresh-start state (same values as a brand new page load).
+    virtualElapsed = 1;
+    timeOffset = 0;
+    timeSpeed = 1;
+    milestoneMulti = 1;
+    tt = 0;
+    player_time = 0;
+    mpage = 0;
+    if (speedInput) speedInput.value = "1";
+    if (offsetInput) offsetInput.value = "0";
+
+    // Even value of `pause` = paused, so the reset always ends up paused.
+    pause = 2;
+
+    // Wipe every saved highest-sequence record.
+    if (typeof highest_terms_reset === "function") highest_terms_reset();
+
+    // Clear transient Time Control inputs/results.
+    ["search_input", "virus", "sex"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = "";
+    });
+    const searchResult = document.getElementById("search_result");
+    if (searchResult) searchResult.textContent = "Please insert ordinal!";
+
+    // Persist the reset immediately (update() also re-saves every frame).
+    saveMisc();
+    updatePauseIndicator();
+}
+
+const btnReset = document.getElementById("btn_reset");
+if (btnReset) btnReset.onclick = resetEverything;
+
 function formatSeconds(totalSeconds) {
     if (totalSeconds <= 0) return "0 seconds";
     let s = totalSeconds;
@@ -515,10 +563,9 @@ function update() {
 
     document.getElementById("main_lngi_Content").innerHTML = `<i>${u[2]}</i>`
     // Feed the displayed sequence to the Highest terms tracker (runs on every
-    // tab, so records are kept even while the tab is closed). The rewind check
-    // has to run first: it drops records from a future the player jumped back
-    // out of before the current sequence is tracked again.
-    highest_terms_check_rewind(virtualElapsed + timeOffset)
+    // tab, so records are kept even while the tab is closed). The tracker
+    // itself handles both time travel and new sequence branches: records for
+    // lengths the sequence no longer reaches are dropped there.
     track_highest_terms(Array.isArray(u) ? u[2] : null)
     document.getElementById("main_lngi_bar").innerHTML = `${u[0]} to next ordinal (${u[1]} left)`
     updatePauseIndicator();

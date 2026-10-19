@@ -168,6 +168,7 @@
             </div>
             <hr>
             <button style="padding: 4px 10px; cursor: pointer;" onclick="pause+=1">Pause/Continue</button>
+            <button id="btn_reset" style="padding: 4px 10px; cursor: pointer; background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; font-weight: bold;">Reset everything</button>
             <button style="padding: 4px 10px; cursor: pointer;" onclick="virtualElapsed+=1">+1</button>
             <button style="padding: 4px 10px; cursor: pointer;" onclick="virtualElapsed+=10">+10</button>
             <button style="padding: 4px 10px; cursor: pointer;" onclick="virtualElapsed+=100">+100</button>
@@ -297,14 +298,24 @@
 
     <div id="highest_terms" class="card" style="display: none; height: 600px; overflow-y: auto;">
         <div class="highest-intro">
-            Highest value ever reached by each term of the &omega;-Y sequence.<br>
-            Term 1 is always 1 (it can never grow), so it is not tracked. A record is kept
-            even when the sequence drops back down, until that term grows past it again.
-            Sending the clock backwards with the Time Control drops the records of terms
-            the rewound-to sequence can no longer reach; terms still present keep theirs.
+            Highest sequence ever reached for each length &mdash; every row saves the
+            whole n-term sequence (from 2 terms up to 26 terms), compared term by term.
+            Term 1 is always 1 (it can never grow), so it is not tracked.<br>
+            While the main sequence still starts with a saved record &mdash; e.g. the
+            record <i>1,2,3,4,5,6,7</i> while the main sequence is <i>1,2,3,4,5,6,7,8</i>
+            &mdash; that record keeps being saved. As soon as the main sequence becomes
+            too short to contain it &mdash; moving to a new branch like <i>1,2,4</i>, or
+            rewinding with the Time Control &mdash; the record is dropped. Otherwise a
+            record is only beaten by a bigger sequence, never by travelling back in time.
         </div>
-        <div class="highest-summary">Terms with a record: <span id="highest_terms_count">0 / 25</span></div>
-        <div id="highest_terms_container"></div>
+        <div class="highest-summary">Lengths with a saved sequence: <span id="highest_terms_count">0 / 25</span></div>
+        <div id="highest_terms_container">
+            <div class="highest-row highest-head">
+                <span class="highest-label">Length</span>
+                <span class="highest-record">Highest sequence ever</span>
+                <span class="highest-now">Current main sequence</span>
+            </div>
+        </div>
     </div>
 
 
