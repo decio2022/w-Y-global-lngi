@@ -36,6 +36,7 @@ start at length 2.
 
 const HIGHEST_TERMS_TRACKED = 25; // rows: length 2 .. 26 (length 1 is always just 1)
 const HIGHEST_TERMS_KEY = "lngi_app_highest_terms";
+const HIGHEST_TERMS_COUNTS_KEY = "lngi_app_highest_terms_increases";
 const HIGHEST_TERMS_DECIMAL = /^\d+$/;
 // A valid saved record: decimal terms only, e.g. "1,2,4,8".
 const HIGHEST_TERMS_RECORD = /^\d+(,\d+)*$/;
@@ -99,6 +100,25 @@ function is_valid_highest_record(value, length) {
 }
 
 function load_highest_terms() {
+    // Increase counters live in their own key so old saves keep working.
+    try {
+        const savedCounts = localStorage.getItem(HIGHEST_TERMS_COUNTS_KEY);
+        highestTermsIncreases = new Array(HIGHEST_TERMS_TRACKED).fill(0);
+        if (savedCounts) {
+            const parsedCounts = JSON.parse(savedCounts);
+            if (Array.isArray(parsedCounts)) {
+                for (let i = 0; i < HIGHEST_TERMS_TRACKED && i < parsedCounts.length; i++) {
+                    const c = parsedCounts[i];
+                    if (typeof c === "number" && Number.isInteger(c) && c > 0) {
+                        highestTermsIncreases[i] = c;
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.error("Failed to load highest terms increase counts:", e);
+    }
+
     try {
         const saved = localStorage.getItem(HIGHEST_TERMS_KEY);
         if (!saved) return;
@@ -120,15 +140,31 @@ function load_highest_terms() {
 function save_highest_terms() {
     try {
         localStorage.setItem(HIGHEST_TERMS_KEY, JSON.stringify(highestTerms));
+        // Counts only ever change together with a record, so both are saved
+        // here; saving one without the other would desync them.
+        localStorage.setItem(HIGHEST_TERMS_COUNTS_KEY, JSON.stringify(highestTermsIncreases));
     } catch (e) {
         console.error("Failed to save highest terms:", e);
     }
 }
 
-// Wipe every saved sequence and any pending jump scan (used by the
-// "Reset everything" button).
+// Raise record #i to `prefix` when it is strictly bigger (or missing).
+// Every actual raise — including the very first save for that length —
+// counts as one increase.
+function raise_record(i, prefix) {
+    if (highestTerms[i] !== null && compare_term_sequences(prefix, highestTerms[i]) <= 0) {
+        return false;
+    }
+    highestTerms[i] = prefix;
+    highestTermsIncreases[i] = (highestTermsIncreases[i] || 0) + 1;
+    return true;
+}
+
+// Wipe every saved sequence, its increase counts and any pending jump scan
+// (used by the "Reset everything" button).
 function highest_terms_reset() {
     highestTerms = new Array(HIGHEST_TERMS_TRACKED).fill(null);
+    highestTermsIncreases = new Array(HIGHEST_TERMS_TRACKED).fill(0);
     highestTermsNow = new Array(HIGHEST_TERMS_TRACKED).fill(null);
     highestTermsRendered = new Array(HIGHEST_TERMS_TRACKED).fill(null);
     highestTermsLastTime = null;
@@ -136,6 +172,7 @@ function highest_terms_reset() {
     highestTermsRewindPending = false;
     try {
         localStorage.removeItem(HIGHEST_TERMS_KEY);
+        localStorage.removeItem(HIGHEST_TERMS_COUNTS_KEY);
     } catch (e) {
         console.error("Failed to clear highest terms:", e);
     }
@@ -157,8 +194,7 @@ function highest_terms_absorb(seq) {
         const n = i + 2;
         if (n > reachable) continue;
         const prefix = terms.slice(0, n).map(t => t.trim()).join(",");
-        if (highestTerms[i] === null || compare_term_sequences(prefix, highestTerms[i]) > 0) {
-            highestTerms[i] = prefix;
+        if (raise_record(i, prefix)) {
             changed = true;
         }
     }
@@ -262,6 +298,13 @@ function track_highest_terms(seq) {
     const applyRewind = highestTermsRewindPending;
     if (applyRewind) highestTermsRewindPending = false;
 
+    // While a forward-jump scan is still filling the gap, record-raising is
+    // left to the scan: it walks every skipped sequence in chronological
+    // order (and finishes with this frame's destination), so each increase
+    // is counted the same way playing through would have counted it. This
+    // frame only keeps the "current" column fresh.
+    const scanPending = highestTermsScanQueue.length > 0;
+
     let changed = false;
     for (let i = 0; i < HIGHEST_TERMS_TRACKED; i++) {
         const n = i + 2;
@@ -272,11 +315,13 @@ function track_highest_terms(seq) {
 
             // A record is only beaten by a bigger sequence — never by time
             // travel, and never because the main sequence is short right now.
-            if (highestTerms[i] === null || compare_term_sequences(prefix, highestTerms[i]) > 0) {
-                highestTerms[i] = prefix;
+            // Each raise bumps the row's increase counter.
+            if (!scanPending && raise_record(i, prefix)) {
                 changed = true;
             }
         } else if (applyRewind && highestTerms[i] !== null) {
+            // The record goes away, but its increase count is history and
+            // stays saved.
             highestTerms[i] = null;
             changed = true;
         }
@@ -311,9 +356,15 @@ function highest_terms_init() {
         now.id = `highest_now_${n}`;
         now.title = `The main sequence's first ${n} terms right now`;
 
+        const count = document.createElement("span");
+        count.className = "highest-count";
+        count.id = `highest_count_${n}`;
+        count.title = `How many times the ${n}-term record has been increased`;
+
         row.appendChild(label);
         row.appendChild(record);
         row.appendChild(now);
+        row.appendChild(count);
         container.appendChild(row);
     }
 
@@ -322,24 +373,30 @@ function highest_terms_init() {
 
 function render_highest_terms() {
     let reached = 0;
+    let totalIncreases = 0;
 
     for (let i = 0; i < HIGHEST_TERMS_TRACKED; i++) {
         const n = i + 2;
         const record = highestTerms[i];
         const now = highestTermsNow[i];
+        const increases = highestTermsIncreases[i] || 0;
 
         if (record !== null) reached++;
+        totalIncreases += increases;
 
-        // Skip rows whose record and current value did not change since last frame.
-        const cacheKey = `${record}|${now}`;
+        // Skip rows whose record, current value and count did not change
+        // since last frame.
+        const cacheKey = `${record}|${now}|${increases}`;
         if (highestTermsRendered[i] === cacheKey) continue;
         highestTermsRendered[i] = cacheKey;
 
         const row = document.getElementById(`highest_row_${n}`);
         const recordEl = document.getElementById(`highest_record_${n}`);
         const nowEl = document.getElementById(`highest_now_${n}`);
-        if (!row || !recordEl || !nowEl) continue;
+        const countEl = document.getElementById(`highest_count_${n}`);
+        if (!row || !recordEl || !nowEl || !countEl) continue;
 
+        countEl.textContent = String(increases);
         recordEl.textContent = record === null ? "not reached yet" : record;
 
         if (now === null) {
@@ -359,6 +416,8 @@ function render_highest_terms() {
 
     const count = document.getElementById("highest_terms_count");
     if (count) count.textContent = `${reached} / ${HIGHEST_TERMS_TRACKED}`;
+    const totalEl = document.getElementById("highest_terms_increases");
+    if (totalEl) totalEl.textContent = String(totalIncreases);
 }
 
 load_highest_terms();

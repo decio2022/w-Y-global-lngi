@@ -312,14 +312,19 @@
             every sequence of 3+ terms reached before <i>1,2,4</i>. Sending the clock
             backwards drops only the lengths the rewound-to sequence can no longer
             reach; everything else is only beaten by a bigger sequence, never by
-            time travel.
+            time travel.<br>
+            The last column counts how many times that row's record has been
+            increased &mdash; every bigger sequence that took it, first save
+            included (a rewind drop empties the record but keeps its count).
         </div>
-        <div class="highest-summary">Lengths with a saved sequence: <span id="highest_terms_count">0 / 25</span></div>
+        <div class="highest-summary">Lengths with a saved sequence: <span id="highest_terms_count">0 / 25</span>
+            &middot; Total increases: <span id="highest_terms_increases">0</span></div>
         <div id="highest_terms_container">
             <div class="highest-row highest-head">
                 <span class="highest-label">Length</span>
                 <span class="highest-record">Highest sequence ever</span>
                 <span class="highest-now">Current main sequence</span>
+                <span class="highest-count">Increases</span>
             </div>
         </div>
     </div>

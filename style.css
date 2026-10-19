@@ -421,6 +421,15 @@ h2 {
     word-break: break-all;
 }
 
+/* how many times the row's record has been increased */
+.highest-count {
+    flex: 0 0 64px;
+    text-align: right;
+    color: #8a6d3b;
+    font-weight: bold;
+    font-size: 85%;
+}
+
 /* column titles above the per-length rows */
 .highest-row.highest-head {
     background: transparent;
@@ -434,6 +443,10 @@ h2 {
 .highest-head .highest-now {
     font-family: inherit;
     font-size: 85%;
+}
+
+.highest-head .highest-count {
+    color: #666;
 }
 
 #settings_btn {
