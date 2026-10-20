@@ -60,8 +60,9 @@
             <select id="game_length" title="Pick the length to play (4 to 25)"></select>
             <span class="game-hint">Every length has its own chain — it starts at that
                 length's first sequence, and each correct answer becomes the next
-                prompt. For each length the highest sequence you typed correctly is
-                saved.</span>
+                prompt. Sequences longer than your length are skipped (at length 4,
+                1,1,1,1 is followed by 1,2). For each length the highest sequence you
+                typed correctly is saved.</span>
         </div>
         <div class="game-prompt">
             <div class="game-label">Current sequence (length <span id="game_len_badge">4</span>):</div>

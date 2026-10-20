@@ -3,9 +3,11 @@
 
 Each length (4 .. 25) has its own chain: it starts at that length's first
 sequence on the real ω-Y timeline and every CORRECT answer becomes the next
-prompt, so you build the chain yourself from what you typed. Your answer must
-be the sequence that really follows the prompt on the timeline — the true
-successor of that state.
+prompt, so you build the chain yourself from what you typed. The correct
+answer is the first sequence after the prompt that has AT MOST your length's
+number of terms: the timeline regularly overshoots into much longer states
+(the all-ones filler), and those are skipped — at length 4, 1,1,1,1 is
+followed by 1,2, not by 1,1,1,1,1.
 
 For every length the game saves the highest sequence you typed CORRECTLY
 (lexicographic comparison, same rule as the Highest terms records), in
@@ -62,7 +64,7 @@ const GAME_STARTS = {
 
 // { length, chains: { n -> current prompt }, records: { n -> highest typed } }
 var gameState = { length: GAME_LENGTH_MIN, chains: {}, records: {} };
-// Per-session cache: sequence -> its true successor.
+// Per-session cache: level + sequence -> its next qualifying sequence.
 var gameSuccessorCache = new Map();
 var gameInited = false;
 
@@ -131,10 +133,12 @@ function game_state_at(u) {
 }
 
 // The current length's prompt (starts at that length's first sequence).
+// Chains saved under an older rule may hold sequences longer than the level
+// — those fall back to the level's start so every round keeps its n-term cap.
 function game_prompt(n) {
     const key = String(n === undefined || n === null ? gameState.length : n);
     const chain = gameState.chains[key];
-    if (game_is_valid_seq(chain)) return chain;
+    if (game_is_valid_seq(chain) && chain.split(",").length <= Number(key)) return chain;
     return GAME_STARTS[key];
 }
 
@@ -154,35 +158,39 @@ function game_first_reach(seq) {
     return compare_term_sequences(game_state_at(hi), seq) === 0 ? hi : null;
 }
 
-// The sequence that really follows `seq` on the ω-Y timeline, or null when
-// `seq` is not a real ω-Y sequence / nothing within the known range follows
-// it. Uses bisecting: the path never moves down lexicographically, so "the
-// first omega where the state beats seq" is exactly the prompt's end — the
-// state right there is the immediate successor.
-function game_successor(seq) {
+// The sequence that really follows `seq` on the ω-Y timeline FOR A ROUND OF
+// LENGTH n: the first state after the prompt that has AT MOST n terms. The
+// timeline regularly overshoots into much longer states (the all-ones filler,
+// e.g. 1,1,1,1 -> 1,1,1,1,1 -> ... -> 45 ones); those are skipped, so at
+// length 4 the answer to 1,1,1,1 is 1,2. Returns null when `seq` is not a
+// real ω-Y sequence or no such state exists within the known range.
+function game_successor(seq, n) {
     if (!game_is_valid_seq(seq)) return null;
-    if (gameSuccessorCache.has(seq)) return gameSuccessorCache.get(seq);
+    const key = n + "|" + seq;
+    if (gameSuccessorCache.has(key)) return gameSuccessorCache.get(key);
 
     let result = null;
     try {
         const start = game_first_reach(seq);
-        if (start !== null && compare_term_sequences(game_state_at(GAME_U_HI), seq) > 0) {
-            let lo = start, hi = GAME_U_HI;
-            for (let k = 0; k < GAME_BISECT_STEPS; k++) {
-                const mid = lo + (hi - lo) / 2;
-                if (mid <= lo || mid >= hi) break;
-                if (compare_term_sequences(game_state_at(mid), seq) > 0) hi = mid;
-                else lo = mid;
+        if (start !== null) {
+            let prev = seq;
+            for (let u = start; u <= GAME_U_HI; u += HIGHEST_SCAN_STEP) {
+                const s = game_state_at(u);
+                if (s === prev) continue;
+                prev = s;
+                if (s.split(",").length <= n) { result = s; break; }
             }
-            const succ = game_state_at(hi);
-            if (compare_term_sequences(succ, seq) > 0) result = succ;
+            if (result === null) {
+                const tail = game_state_at(GAME_U_HI);
+                if (tail !== prev && tail.split(",").length <= n) result = tail;
+            }
         }
     } catch (e) {
         console.error("Failed to compute the next ω-Y sequence:", e);
         return null;
     }
 
-    gameSuccessorCache.set(seq, result);
+    gameSuccessorCache.set(key, result);
     return result;
 }
 
@@ -197,13 +205,13 @@ function game_submit(rawInput) {
     const key = String(n);
 
     let prompt = game_prompt(n);
-    let expected = game_successor(prompt);
+    let expected = game_successor(prompt, n);
     if (expected === null && game_first_reach(prompt) === null) {
         // A corrupted/foreign saved chain: start that length over.
         delete gameState.chains[key];
         save_game_state();
         prompt = GAME_STARTS[key];
-        expected = game_successor(prompt);
+        expected = game_successor(prompt, n);
         game_render();
         return { ok: false, reason: "invalid_prompt" };
     }
