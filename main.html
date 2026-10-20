@@ -21,9 +21,10 @@
          </div>
         </div>
         <div class="status-row">
-            <div class="status-buttons">
-                <button id="btn_lngi" hidden>Lngi & Analysis</button>
-                <button id="btn_progress">Progress</button>
+        <div class="status-buttons">
+            <button id="btn_lngi" hidden>Lngi & Analysis</button>
+            <button id="btn_game">Type the next</button>
+            <button id="btn_progress">Progress</button>
                 <button id="btn_search">Virtual Elapsed</button>
                 <button id="btn_milestone">Milestone</button>
                 <button id="mountain_btn" hidden>Visualizer</button>
@@ -50,6 +51,32 @@
     <div class="card resizable" id="main_lngi">
         <div id="main_lngi_Content">Loading main sequence...</div>
         <div class="resize-handle"></div>
+    </div>
+
+    <div class="card" id="game_panel">
+        <h3>Type the next &omega;-Y sequence</h3>
+        <div class="game-controls">
+            <label for="game_length">Length:</label>
+            <select id="game_length" title="Pick the length to play (4 to 25)"></select>
+            <span class="game-hint">Every length has its own chain — it starts at that
+                length's first sequence, and each correct answer becomes the next
+                prompt. For each length the highest sequence you typed correctly is
+                saved.</span>
+        </div>
+        <div class="game-prompt">
+            <div class="game-label">Current sequence (length <span id="game_len_badge">4</span>):</div>
+            <div id="game_prompt_seq">…</div>
+        </div>
+        <form id="game_form" class="game-form" autocomplete="off">
+            <input id="game_input" type="text" spellcheck="false"
+                   placeholder="type the whole next sequence, e.g. 1,1,1,1,1">
+            <button id="game_submit" type="submit">Submit</button>
+        </form>
+        <div id="game_feedback" class="game-feedback"></div>
+        <div class="game-records-wrap">
+            <div class="game-label">Highest typed (correct) per length:</div>
+            <div id="game_records" class="game-records"></div>
+        </div>
     </div>
 
     <div class="card milestone-header" id="milestone_header">
@@ -402,6 +429,7 @@
 <script src="conv.js"></script>
 <script src="search.js"></script>
 <script src="lngi.js"></script>
+<script src="game.js"></script>
 <script src="milestone.js"></script>
 <script src="visualizer.js"></script>
 <script src="final_load.js" defer></script>

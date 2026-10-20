@@ -667,3 +667,119 @@ h2 {
     flex: 1;
     overflow-wrap: anywhere;
 }
+
+/* Typing game ("Type the next ω-Y sequence") */
+#game_panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: #e8f4ff;
+}
+
+#game_panel h3 {
+    margin: 0;
+}
+
+.game-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.game-controls select {
+    font-size: 1em;
+    padding: 2px 6px;
+}
+
+.game-hint {
+    flex: 1;
+    min-width: 220px;
+    font-size: 0.85em;
+    color: #555;
+}
+
+.game-label {
+    font-size: 0.85em;
+    font-weight: bold;
+    color: #444;
+    margin-bottom: 3px;
+}
+
+.game-prompt #game_prompt_seq {
+    font-family: "Courier New", monospace;
+    font-size: 1.4em;
+    font-weight: bold;
+    background: #fff;
+    border: 1px solid #b8daff;
+    border-radius: 4px;
+    padding: 8px 10px;
+    overflow-wrap: anywhere;
+}
+
+.game-form {
+    display: flex;
+    gap: 8px;
+}
+
+.game-form #game_input {
+    flex: 1;
+    font-family: "Courier New", monospace;
+    font-size: 1.05em;
+    padding: 6px 8px;
+    border: 1px solid #aaa;
+    border-radius: 4px;
+    min-width: 200px;
+}
+
+.game-form #game_submit {
+    padding: 6px 16px;
+    font-weight: bold;
+    cursor: pointer;
+    background: #cce5ff;
+    color: #004085;
+    border: 1px solid #b8daff;
+    border-radius: 4px;
+}
+
+.game-feedback {
+    min-height: 1.3em;
+    font-weight: bold;
+}
+
+.game-feedback.game-ok {
+    color: #155724;
+}
+
+.game-feedback.game-bad {
+    color: #721c24;
+}
+
+.game-records {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 2px 14px;
+    font-size: 0.9em;
+}
+
+.game-record {
+    display: flex;
+    gap: 6px;
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
+.game-record.active {
+    background: #fff3cd;
+    outline: 1px solid #ffeaa7;
+}
+
+.game-record-len {
+    font-weight: bold;
+    min-width: 2.4em;
+}
+
+.game-record-value {
+    font-family: "Courier New", monospace;
+    overflow-wrap: anywhere;
+}

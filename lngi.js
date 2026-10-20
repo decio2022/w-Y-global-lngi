@@ -81,7 +81,8 @@ function resetEverything() {
         "Reset everything to the start?\n\n" +
         "• Time progress (Virtual Elapsed), time offset and time speed\n" +
         "• Milestone multiplier\n" +
-        "• All saved highest sequences\n\n" +
+        "• All saved highest sequences\n" +
+        "• The typing game (chains and highest typed per length)\n\n" +
         "The game will be paused automatically.\n" +
         "Display settings and the saved layout are kept."
     );
@@ -103,6 +104,9 @@ function resetEverything() {
 
     // Wipe every saved highest-sequence record.
     if (typeof highest_terms_reset === "function") highest_terms_reset();
+
+    // Forget the typing game's chains and highest-typed records too.
+    if (typeof game_reset === "function") game_reset();
 
     // Clear transient Time Control inputs/results.
     ["search_input", "virus", "sex"].forEach(id => {

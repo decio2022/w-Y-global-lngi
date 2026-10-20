@@ -80,13 +80,20 @@ Scratch_bar_height.addEventListener("input", function () {
     );
 });
 
-let page = 2; // 0: main, 1: progress, 2: milestone (and 3: some cool mountain, 4: milestones, 5: buddy, 6: highest terms)
+let page = 7; // 0: main, 1: progress, 2: milestone (and 3: some cool mountain, 4: milestones, 5: buddy, 6: highest terms, 7: typing game)
 //did u even do that
 //just compress it into a SINGLE FUNCTION thats so good :3
 const btn_lngi = document.getElementById("btn_lngi");
 
 btn_lngi.addEventListener("click", () => {
     page = 0;
+    update_page()
+});
+
+const btn_game = document.getElementById("btn_game");
+
+btn_game.addEventListener("click", () => {
+    page = 7;
     update_page()
 });
 
@@ -144,6 +151,7 @@ function update_page() {
     document.getElementById("real_milestones").style.display = page == 4 ? "flex" : "none"
     document.getElementById("buddy").style.display = page == 5 ? "flex" : "none"
     document.getElementById("highest_terms").style.display = page == 6 ? "flex" : "none"
+    document.getElementById("game_panel").style.display = page == 7 ? "flex" : "none"
 }
 
 let analysisPanels = [
