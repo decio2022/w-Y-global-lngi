@@ -2938,7 +2938,8 @@ function renderMilestoneBox(element) {
     var M = parseInt(element.dataset.index, 10);
 
     var vt = get_virtual_elapsed();
-    // Milestone M+1 is reached M+1 days after milestone M (see milestone_time_ms).
+    // Day of the schedule this milestone sits on (see milestone_days_to_reach).
+    var days = milestone_days_to_reach(M + 1);
     var reached = milestone_time_ms(M + 1);
     var T = vt - reached;
     var R = valid_milestones[M][3];
@@ -2954,7 +2955,8 @@ function renderMilestoneBox(element) {
     <div class="milestone_sub_box" style="text-align: right">
         <span style="font-size: 120%">${valid_milestones[M][1]}</span>
         ${T < 0 ? `<br>in ${formatSeconds(-T / 1000)}` : `<br>${formatSeconds(T / 1000)} ago`}<br>
-        ${new Date(reached + st).toLocaleString()}
+        ${new Date(reached + st).toLocaleString()}<br>
+        <small style="color: gray">day ${days.toLocaleString(undefined, { maximumFractionDigits: 2 })}</small>
     </div>
 </div><hr>
 ${valid_milestones[M][2]}`;

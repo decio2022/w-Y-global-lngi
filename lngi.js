@@ -77,6 +77,8 @@ function formatSeconds(totalSeconds) {
     // Round to the displayed precision first, so a value like 44.9999 days reads
     // "45 days" instead of "44 days 23 hours 59 minutes 60.00 seconds".
     let s = Math.round(totalSeconds * 100) / 100;
+    // Milestones after "1,3" can be less than a hundredth of a second apart.
+    if (s <= 0) return "under a second";
     const years = Math.floor(s / (86400*365)); s %= (86400*365);
     const days = Math.floor(s / 86400); s %= 86400;
     const hours = Math.floor(s / 3600); s %= 3600;
@@ -271,15 +273,87 @@ function num_to_lngi(m) {
 const LNGI_DAY_MS = 24 * 60 * 60 * 1000;
 
 // --- Milestone day schedule -------------------------------------------------
-// Every milestone takes one more day than the milestone before it:
-//   milestone 1 is reached 1 day after the start,
-//   milestone 2 is reached 2 days after milestone 1,
-//   milestone 3 is reached 3 days after milestone 2,
-//   ... and so on up to the last milestone in `valid_milestones`
-//   (milestone 415 when the list has 415 entries).
-// So milestone n (1 based) is reached after 1 + 2 + ... + n = n(n+1)/2 days.
+// The first two milestones ("1" and "1,1") are free: they don't count, the
+// journey already has them when it starts. Counting starts at "1,1,1":
+//   counted milestone 1 ("1,1,1") is reached 1 day after the start,
+//   counted milestone 2 ("1,2")   2 days after that,
+//   counted milestone 3 ("1,2,1") 3 days after that,
+//   ... one more day each time, up to "1,3".
+// Once "1,3" is reached every next milestone is 1.1x faster than the one
+// before it, i.e. each new milestone after "1,3" takes its previous waiting
+// time divided by 1.1.
+const LNGI_FIRST_COUNTED_MILESTONE = 3;      // 1-based index of "1,1,1"
+const LNGI_SPEEDUP_ORDINAL = "1,3";          // the schedule speeds up after this one
+const LNGI_SPEEDUP_FACTOR = 1.1;
+
+let lngi_milestone_days = null;
+let lngi_milestone_days_source = null;
+let lngi_milestone_days_source_len = -1;
+
+// Counted number of "1,3" (Infinity when the list has no "1,3").
+function milestoneDaysSpeedupFrom(milestones) {
+    for (let i = 0; i < milestones.length; i++) {
+        if (String(milestones[i][0]).trim() === LNGI_SPEEDUP_ORDINAL) {
+            return (i + 1) - (LNGI_FIRST_COUNTED_MILESTONE - 1);
+        }
+    }
+    return Infinity;
+}
+
+// Days (from the start of the journey) at which every milestone is reached,
+// indexed by milestone position in `valid_milestones`.
+function buildMilestoneDays(milestones) {
+    const days = new Array(milestones.length);
+    const speedupFrom = milestoneDaysSpeedupFrom(milestones);
+
+    let day = 0;
+    let gap = 0;
+    for (let i = 0; i < milestones.length; i++) {
+        const counted = (i + 1) - (LNGI_FIRST_COUNTED_MILESTONE - 1);
+        if (counted < 1) {
+            // "1" and "1,1" don't count: both are had right at the start.
+            days[i] = 0;
+            continue;
+        }
+        gap = (counted <= speedupFrom) ? counted : gap / LNGI_SPEEDUP_FACTOR;
+        day += gap;
+        days[i] = day;
+    }
+
+    return days;
+}
+
+// Cached per milestone list (the schedule is rebuilt if the list is replaced).
+function getMilestoneDays() {
+    const milestones = lngiMilestoneList();
+    if (!lngi_milestone_days ||
+        lngi_milestone_days_source !== milestones ||
+        lngi_milestone_days_source_len !== milestones.length) {
+        lngi_milestone_days = buildMilestoneDays(milestones);
+        lngi_milestone_days_source = milestones;
+        lngi_milestone_days_source_len = milestones.length;
+    }
+    return lngi_milestone_days;
+}
+
+// Days from the start at which milestone `n` (1 based) is reached.
 function milestone_days_to_reach(n) {
-    return n * (n + 1) / 2;
+    const days = getMilestoneDays();
+    const i = n - 1;
+
+    if (i < 0) return 0;
+    if (i < days.length) return days[i];
+    if (days.length === 0) return 0;
+
+    // Past the end of the list: keep going with the same rule.
+    let day = days[days.length - 1];
+    let gap = days.length > 1 ? days[days.length - 1] - days[days.length - 2] : 1;
+    const spedUp = (days.length - (LNGI_FIRST_COUNTED_MILESTONE - 1)) > milestoneDaysSpeedupFrom(lngiMilestoneList());
+    for (let k = days.length; k <= i; k++) {
+        gap = spedUp ? gap / LNGI_SPEEDUP_FACTOR : gap + 1;
+        day += gap;
+    }
+    return day;
 }
 
 // Elapsed time (ms, from the start of the journey) at which milestone `n` is reached.
@@ -341,6 +415,12 @@ function interpolateLngiTimeline(input, fromKey, toKey) {
     const timeline = getLngiTimeline();
     if (input <= timeline[0][fromKey]) {
         return timeline[0][toKey];
+    }
+    // Past the last milestone the schedule is over, so hold the last value
+    // instead of extrapolating: the milestones after "1,3" are so close
+    // together that the last step's slope would blow the value up.
+    if (input >= timeline[timeline.length - 1][fromKey]) {
+        return timeline[timeline.length - 1][toKey];
     }
     for (let i = 1; i < timeline.length; i++) {
         const previous = timeline[i - 1];

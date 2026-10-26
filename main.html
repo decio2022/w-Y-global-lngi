@@ -274,8 +274,9 @@
             There are a total of <span id="milestone_length"></span> milestones.<br>
             The next milestone is <span id="real_milestone_next"></span><br>
             <small>
-                Milestone 1 is reached after 1 day, and every next milestone takes one more day than the
-                previous one (milestone n at 1 + 2 + ... + n days).
+                "1" and "1,1" don't count (they're reached right at the start). Counting starts at "1,1,1":
+                1 day, then 2 days, then 3 days, one more day each time. Every milestone after "1,3" is
+                1.1&times; faster than the one before it.
             </small>
         </div>
         <div style="overflow-y: scroll;">
