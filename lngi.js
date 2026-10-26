@@ -283,7 +283,7 @@ const LNGI_DAY_MS = 24 * 60 * 60 * 1000;
 // before it, i.e. each new milestone after "1,3" takes its previous waiting
 // time divided by 1.1.
 const LNGI_FIRST_COUNTED_MILESTONE = 3;      // 1-based index of "1,1,1"
-const LNGI_SPEEDUP_ORDINAL = "1,3";          // the schedule speeds up after this one
+const LNGI_SPEEDUP_ORDINAL = "1,2,4";          // the schedule speeds up after this one
 const LNGI_SPEEDUP_FACTOR = 1.1;
 
 let lngi_milestone_days = null;
