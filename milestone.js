@@ -2938,11 +2938,12 @@ function renderMilestoneBox(element) {
     var M = parseInt(element.dataset.index, 10);
 
     var vt = get_virtual_elapsed();
-    var ct = get_time(vt);
-    var T = vt - get_time_inv(valid_milestones[M][4]);
+    // Milestone M+1 is reached M+1 days after milestone M (see milestone_time_ms).
+    var reached = milestone_time_ms(M + 1);
+    var T = vt - reached;
     var R = valid_milestones[M][3];
 
-    element.style["background-image"] = `linear-gradient(45deg,${(ct >= valid_milestones[M][4]) ? `rgba(140,255,140,${1 - R * 0.03})` : `rgba(255,140,140,${1 - R * 0.03})`},white)`;
+    element.style["background-image"] = `linear-gradient(45deg,${(vt >= reached) ? `rgba(140,255,140,${1 - R * 0.03})` : `rgba(255,140,140,${1 - R * 0.03})`},white)`;
     //element.style.backgroundColor = (ct >= valid_milestones[M][4]) ? `rgba(140,255,140,${1 - R * 0.03})` : `rgba(255,140,140,${1 - R * 0.03})`;
     element.innerHTML = `
 <div style="display: flex; flex-direction: row">
@@ -2953,7 +2954,7 @@ function renderMilestoneBox(element) {
     <div class="milestone_sub_box" style="text-align: right">
         <span style="font-size: 120%">${valid_milestones[M][1]}</span>
         ${T < 0 ? `<br>in ${formatSeconds(-T / 1000)}` : `<br>${formatSeconds(T / 1000)} ago`}<br>
-        ${new Date(get_time_inv(valid_milestones[M][4]) + st).toLocaleString()}
+        ${new Date(reached + st).toLocaleString()}
     </div>
 </div><hr>
 ${valid_milestones[M][2]}`;
@@ -2988,12 +2989,11 @@ function update_milestones() {
 
     var N = 0
     var vt = get_virtual_elapsed();
-    var ct = get_time(vt);
-    while (N < valid_milestones.length - 1 && valid_milestones[N][4] < ct) {
+    while (N < valid_milestones.length - 1 && milestone_time_ms(N + 1) <= vt) {
         N = N+1
     }
-    var T = vt - get_time_inv(valid_milestones[N][4]);
-    document.getElementById("real_milestone_next").innerHTML = `${N}# ${valid_milestones[N][0]} / ${valid_milestones[N][1]}<br>in ${formatSeconds(-T / 1000)}`
+    var T = vt - milestone_time_ms(N + 1);
+    document.getElementById("real_milestone_next").innerHTML = `${N + 1}# ${valid_milestones[N][0]} / ${valid_milestones[N][1]}<br>in ${formatSeconds(-T / 1000)}`
 }
 
 // Initialize all elements eagerly on page load

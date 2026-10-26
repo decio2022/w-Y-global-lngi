@@ -74,7 +74,9 @@ if (speedInput && offsetInput) {
 }
 function formatSeconds(totalSeconds) {
     if (totalSeconds <= 0) return "0 seconds";
-    let s = totalSeconds;
+    // Round to the displayed precision first, so a value like 44.9999 days reads
+    // "45 days" instead of "44 days 23 hours 59 minutes 60.00 seconds".
+    let s = Math.round(totalSeconds * 100) / 100;
     const years = Math.floor(s / (86400*365)); s %= (86400*365);
     const days = Math.floor(s / 86400); s %= 86400;
     const hours = Math.floor(s / 3600); s %= 3600;
@@ -255,37 +257,98 @@ function ntl(m) {
 
 function num_to_lngi(m) {
     var m = m - m % 1 + 0.5 + 0.5 * (m % 1)
+    // Everything below value 2 is the first milestone ("1"). ntl() can't build
+    // that sequence (it would pop every term and return ""), so handle it here.
+    // `left` is how much of the value range towards "1,1" (value 2) is left.
+    if (m < 2) {
+        const left = Math.max(0, 1.5 - m)
+        super_list = [["1,1", 0, left], ["1", 1, 1]]
+        return ["1", left, 0]
+    }
     return ntl(m)
 }
 
 const LNGI_DAY_MS = 24 * 60 * 60 * 1000;
-const LNGI_STAGE_VALUES = [
-    3.7578125,       // 1,2,4,8,12
-    3.76171875,      // 1,2,4,8,12,16
-    3.763671875,     // 1,2,4,8,12,16,20
-    3.7646484375,    // 1,2,4,8,12,16,20,24
-    3.76513671875,   // 1,2,4,8,12,16,20,24,28
-    3.765380859375,  // 1,2,4,8,12,16,20,24,28,32
-    3.7655029296875, // 1,2,4,8,12,16,20,24,28,32,36
-    3.76556396484375 // 1,2,4,8,12,16,20,24,28,32,36,40
-];
-const LNGI_TIMELINE = [
-    { time: 0, value: 2 },
-    ...LNGI_STAGE_VALUES.map((value, index) => ({
-        time: 100 * (index + 1) * (index + 2) / 2 * LNGI_DAY_MS,
-        value
-    }))
-];
+
+// --- Milestone day schedule -------------------------------------------------
+// Every milestone takes one more day than the milestone before it:
+//   milestone 1 is reached 1 day after the start,
+//   milestone 2 is reached 2 days after milestone 1,
+//   milestone 3 is reached 3 days after milestone 2,
+//   ... and so on up to the last milestone in `valid_milestones`
+//   (milestone 415 when the list has 415 entries).
+// So milestone n (1 based) is reached after 1 + 2 + ... + n = n(n+1)/2 days.
+function milestone_days_to_reach(n) {
+    return n * (n + 1) / 2;
+}
+
+// Elapsed time (ms, from the start of the journey) at which milestone `n` is reached.
+function milestone_time_ms(n) {
+    return milestone_days_to_reach(n) * LNGI_DAY_MS;
+}
+
+// --- Time <-> value timeline ------------------------------------------------
+// One point per milestone, placed at the day the schedule above gives it, so
+// the sequence on screen matches the milestone list exactly.
+// `valid_milestones` lives in milestone.js, which is loaded after this file,
+// so the timeline is built lazily on first use (and rebuilt if the milestone
+// list changes).
+let LNGI_TIMELINE = null;
+let LNGI_TIMELINE_SOURCE_SIZE = -1;
+
+function lngiMilestoneList() {
+    return (typeof valid_milestones === "undefined" || !Array.isArray(valid_milestones))
+        ? []
+        : valid_milestones;
+}
+
+function buildLngiTimeline(milestones) {
+    const timeline = [];
+
+    for (let i = 0; i < milestones.length; i++) {
+        const value = Number(milestones[i][4]);
+        if (!isFinite(value)) continue;
+
+        const time = milestone_time_ms(i + 1);
+        const last = timeline[timeline.length - 1];
+        // A few milestones share the same value. Keep the later time for that
+        // value so the value -> time lookup stays monotonic.
+        if (last && value === last.value) {
+            last.time = time;
+            continue;
+        }
+        // Keep the timeline increasing even if the list is edited badly.
+        if (last && value < last.value) continue;
+        timeline.push({ time: time, value: value });
+    }
+
+    // Fallback so the page still runs if the milestone list is empty.
+    if (timeline.length === 0) timeline.push({ time: 0, value: 2 });
+
+    return timeline;
+}
+
+function getLngiTimeline() {
+    const milestones = lngiMilestoneList();
+    if (!LNGI_TIMELINE || LNGI_TIMELINE_SOURCE_SIZE !== milestones.length) {
+        LNGI_TIMELINE = buildLngiTimeline(milestones);
+        LNGI_TIMELINE_SOURCE_SIZE = milestones.length;
+    }
+    return LNGI_TIMELINE;
+}
 
 function interpolateLngiTimeline(input, fromKey, toKey) {
-    if (input <= LNGI_TIMELINE[0][fromKey]) {
-        return LNGI_TIMELINE[0][toKey];
+    const timeline = getLngiTimeline();
+    if (input <= timeline[0][fromKey]) {
+        return timeline[0][toKey];
     }
-    for (let i = 1; i < LNGI_TIMELINE.length; i++) {
-        const previous = LNGI_TIMELINE[i - 1];
-        const next = LNGI_TIMELINE[i];
-        if (input <= next[fromKey] || i === LNGI_TIMELINE.length - 1) {
-            const progress = (input - previous[fromKey]) / (next[fromKey] - previous[fromKey]);
+    for (let i = 1; i < timeline.length; i++) {
+        const previous = timeline[i - 1];
+        const next = timeline[i];
+        if (input <= next[fromKey] || i === timeline.length - 1) {
+            const span = next[fromKey] - previous[fromKey];
+            if (span === 0) return next[toKey];
+            const progress = (input - previous[fromKey]) / span;
             return previous[toKey] + progress * (next[toKey] - previous[toKey]);
         }
     }
@@ -548,7 +611,7 @@ function update() {
         `;
     document.getElementById("time_mode").innerHTML = `${tt == 0 ? "Time remaining" : "Time reached"} (Press to change)`
 
-    document.title = `ω-Y LNGI: <${super_list.slice(0, 6).at(-1)[0]}`
+    document.title = `ω-Y LNGI: <${(super_list.slice(0, 6).at(-1) || [""])[0]}`
 
     update_milestones(mpage)
 
