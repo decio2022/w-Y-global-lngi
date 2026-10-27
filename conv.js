@@ -663,6 +663,8 @@ THIS IS JUST AN APPROXIMATION NOT EXACT
 AFTER BH , IT SEEMS WRONG FOR ALL
 */
 
+let Lim_cOCF_in_BMS = '1,2,4,8,16,26'
+
 function Conv_BMS_Y_sequence(ord) {
     return Y_Sequence.g(Y_Sequence.ZERO, Lim_BMS_in_Yseq, BMS.gInv(BMS.ZERO, "Limit", ord))
 }
