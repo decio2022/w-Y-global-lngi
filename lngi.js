@@ -272,7 +272,7 @@ const LNGI_STAGE_VALUES = [
 const LNGI_TIMELINE = [
     { time: 0, value: 2 },
     ...LNGI_STAGE_VALUES.map((value, index) => ({
-        time: 100 * (index + 1) * (index + 2) / 2 * LNGI_DAY_MS,
+        time: 200 * (index + 1) * (index + 2) / 2 * LNGI_DAY_MS,
         value
     }))
 ];
