@@ -260,6 +260,8 @@ function num_to_lngi(m) {
 
 const LNGI_DAY_MS = 24 * 60 * 60 * 1000;
 const LNGI_STAGE_VALUES = [
+    3.5,
+    3.75,
     3.7578125,       // 1,2,4,8,12
     3.76171875,      // 1,2,4,8,12,16
     3.763671875,     // 1,2,4,8,12,16,20
@@ -272,7 +274,7 @@ const LNGI_STAGE_VALUES = [
 const LNGI_TIMELINE = [
     { time: 0, value: 2 },
     ...LNGI_STAGE_VALUES.map((value, index) => ({
-        time: 200 * (index + 1) * (index + 2) / 2 * LNGI_DAY_MS,
+        time: 365 * (index + 1) * (index + 2) / 2 * LNGI_DAY_MS,
         value
     }))
 ];
