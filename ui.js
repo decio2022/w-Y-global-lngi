@@ -96,6 +96,15 @@ if (btn_progress) {
     });
 }
 
+
+const btn_search_progress = document.getElementById("btn_search_progress");
+if (btn_search_progress) {
+    btn_search_progress.addEventListener("click", () => {
+        page = 7;
+        update_page()
+    });
+}
+
 const btn_search = document.getElementById("btn_search");
 
 btn_search.addEventListener("click", () => {
@@ -119,9 +128,9 @@ btn_mountain.addEventListener("click", () => {
 
 
 function update_page() {
-    if (document.getElementById("milestone_header")) document.getElementById("milestone_header").style.display = (page == 1) ? "flex" : "none"
-    if (document.getElementById("scratch_bars")) document.getElementById("scratch_bars").hidden = (page != 1)
-    if (document.getElementById("search_progress_source_row")) document.getElementById("search_progress_source_row").hidden = false
+    if (document.getElementById("milestone_header")) document.getElementById("milestone_header").style.display = (page == 1 || page == 7) ? "flex" : "none"
+    if (document.getElementById("scratch_bars")) document.getElementById("scratch_bars").hidden = (page != 1 && page != 7)
+    if (document.getElementById("search_progress_source_row")) document.getElementById("search_progress_source_row").hidden = (page != 7)
     if (document.getElementById("future-milestone")) {
         document.getElementById("future-milestone").hidden = (page != 2)
         document.getElementById("future-milestone").style.display = page == 2 ? "flex" : "none"

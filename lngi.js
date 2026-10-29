@@ -78,8 +78,8 @@ function scratch_bar_init() {
 }
 
 var lt = 0
-function update_scratch_bars(x, currentSimulatedTime, list = super_list) {
-    const draw = false
+function update_scratch_bars(x, currentSimulatedTime, list = super_list, draw = false) {
+    
     for (var i = 0; i < 53; i++) {
         if (i < list.length) {
             var u = x + list[i][2] / (2 ** list[i][1] / 2)
@@ -100,7 +100,7 @@ function update_scratch_bars(x, currentSimulatedTime, list = super_list) {
                 document.getElementById(`bar_${i}`).style.backgroundColor = `hsl(${list[i][1] * 10},100%,90%)`
                 document.getElementById(`bar_${i}`).style.width = `${(1 - list[i][2]) * 100}%`
             }
-            if (i + 1 == list.length) {
+            if (i + 1 == list.length && list === super_list) {
                 lt = secondsLeft
             }
         } else if (draw) {
@@ -396,7 +396,7 @@ function search_progress_bars() {
 }
 
 function update_search_progress_bars() {
-    const bars = search_progress_bars()
+    const bars = search_progress_bars();
 
     for (var i = 0; i < 53; i++) {
         const bar = document.getElementById(`bar_${i}`)
@@ -478,29 +478,14 @@ function renderAnalysisPanels() {
             card.remove(); // Removes node instantly without rebuilding the entire pane layout!
         };
 
-    if (page == 1) {
-        update_search_progress_bars()
-        update_search_progress_source()
-    }
-
         card.querySelector(".width").onchange = e => {
             panel.width = Number(e.target.value);
             card.style.flexBasis = `calc(${panel.width}% - ${(100 - panel.width) / 100 * 15}px)`;
         };
 
-    if (page == 1) {
-        update_search_progress_bars()
-        update_search_progress_source()
-    }
-
         card.querySelector(".notation").onchange = e => {
             panel.notation = e.target.value;
         };
-
-    if (page == 1) {
-        update_search_progress_bars()
-        update_search_progress_source()
-    }
 
         analysisContainer.appendChild(card);
         makeResizable(card, panel);
@@ -530,7 +515,7 @@ function num_time(t,update_main_bar=true) {
         if (update_main_bar) {
 
             document.getElementById("main_lngi_bar").style.width = `${(1 - j[1]) * 100}%`
-            update_scratch_bars(u, t)
+            update_scratch_bars(u, t, super_list, page == 1)
 
             document.getElementById("main_lngi_bar").style.backgroundColor = lt / j[1] < 1 ? `hsl(100,90%,70%)` : `hsl(${(1 - j[1]) * 100},90%,70%)`
         }
@@ -587,10 +572,12 @@ function update() {
         })
     };
 
-    if (page == 1) {
-        update_search_progress_bars()
+    if (page == 7) {
+        update_scratch_bars(analysis_value(), simulatedTime, searched_progress().list, true);
         update_search_progress_source()
     }
+
+
     
     const modifiedElapsedSeconds = Math.max(0, (virtualElapsed + timeOffset) / 1000);
     let timeStatusText = "";
