@@ -163,6 +163,8 @@ function enableHold(button, callback) {
 }
 
 function initializeMilestoneInputs() {
+    if (!document.getElementById("mile_date")) return;
+
     const now = new Date();
 
     

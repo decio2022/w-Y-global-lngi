@@ -25,7 +25,7 @@ document.addEventListener("keydown", (e) => {
 let scratch_bar_display = 'wY'
 const scratch_bar_display_div = document.getElementById("scratch_bar_display_mode");
 
-scratch_bar_display_div.addEventListener("change", () => {
+if (scratch_bar_display_div) scratch_bar_display_div.addEventListener("change", () => {
     scratch_bar_display = scratch_bar_display_div.value
 });
 
@@ -73,29 +73,28 @@ document.querySelectorAll(".resizable").forEach(makeResizable);
 
 const Scratch_bar_height = document.getElementById("Scratch_bar_height");
 
-Scratch_bar_height.addEventListener("input", function () {
+if (Scratch_bar_height) Scratch_bar_height.addEventListener("input", function () {
     document.documentElement.style.setProperty(
         "--scratch-bar-height",
         Scratch_bar_height.valueAsNumber + "px"
     );
 });
 
-let page = 0; // 0: main, 1: progress, 2: milestone (and 3: some cool mountain), 4: real milestones, 5: buddy, 6: credits, 7: progress of the searched ordinal
+let page = 2; // 0: main, 1: progress, 2: milestone (and 3: some cool mountain), 4: real milestones, 5: buddy, 6: credits, 7: progress of the searched ordinal
 //did u even do that
 //just compress it into a SINGLE FUNCTION thats so good :3
-const btn_lngi = document.getElementById("btn_lngi");
 
-btn_lngi.addEventListener("click", () => {
-    page = 0;
-    update_page()
-});
+
+
+
 
 const btn_progress = document.getElementById("btn_progress");
-
-btn_progress.addEventListener("click", () => {
-    page = 1;
-    update_page()
-});
+if (btn_progress) {
+    btn_progress.addEventListener("click", () => {
+        page = 1;
+        update_page()
+    });
+}
 
 const btn_search = document.getElementById("btn_search");
 
@@ -104,12 +103,7 @@ btn_search.addEventListener("click", () => {
     update_page()
 });
 
-const btn_search_progress = document.getElementById("btn_search_progress");
 
-btn_search_progress.addEventListener("click", () => {
-    page = 7;
-    update_page()
-});
 
 const btn_mountain = document.getElementById("mountain_btn");
 
@@ -118,40 +112,21 @@ btn_mountain.addEventListener("click", () => {
     update_page()
 });
 
-const btn_milestone = document.getElementById("btn_milestone");
 
-btn_milestone.addEventListener("click", () => {
-    page = 4;
-    update_page()
-});
 
-const btn_buddy = document.getElementById("btn_buddy");
 
-btn_buddy.addEventListener("click", () => {
-    page = 5;
-    update_page()
-});
 
-const btn_credits = document.getElementById("btn_credits");
 
-btn_credits.addEventListener("click", () => {
-    page = 6;
-    update_page()
-});
 
 function update_page() {
-    document.getElementById("analysis_container").style.display = page == 0 ? "flex" : "none"
-    document.getElementById("analysis_toolbar").style.display = page == 0 ? "flex" : "none"
-    document.getElementById("milestone_header").style.display = (page == 1 || page == 7) ? "flex" : "none"
-    document.getElementById("scratch_bars").hidden = (page != 1 && page != 7)
-    document.getElementById("search_progress_source_row").hidden = (page != 7)
-    document.getElementById("future-milestone").hidden = (page != 2)
-    document.getElementById("future-milestone").style.display = page == 2 ? "flex" : "none"
-    document.getElementById("mountain").hidden = (page != 3)
-    document.getElementById("real_milestones").hidden = (page != 4)
-    document.getElementById("real_milestones").style.display = page == 4 ? "flex" : "none"
-    document.getElementById("buddy").style.display = page == 5 ? "flex" : "none"
-    document.getElementById("credits").style.display = page == 6 ? "block" : "none"
+    if (document.getElementById("milestone_header")) document.getElementById("milestone_header").style.display = (page == 1) ? "flex" : "none"
+    if (document.getElementById("scratch_bars")) document.getElementById("scratch_bars").hidden = (page != 1)
+    if (document.getElementById("search_progress_source_row")) document.getElementById("search_progress_source_row").hidden = false
+    if (document.getElementById("future-milestone")) {
+        document.getElementById("future-milestone").hidden = (page != 2)
+        document.getElementById("future-milestone").style.display = page == 2 ? "flex" : "none"
+    }
+    if (document.getElementById("mountain")) document.getElementById("mountain").hidden = (page != 3)
 }
 
 let analysisPanels = [
@@ -207,7 +182,7 @@ function saveAllSettings() {
         BMS_Terms: Number(document.getElementById("BMS_Terms").value),
 
         // Milestone Settings
-        Scratch_bar_height: Number(document.getElementById("Scratch_bar_height").value),
+        Scratch_bar_height: (document.getElementById("Scratch_bar_height") ? Number(document.getElementById("Scratch_bar_height").value) : 24),
 
         // Visualizer (Mountain) Settings - Sizing
         ROWHEIGHT: Number(document.getElementById("ROWHEIGHT").value),

@@ -22,14 +22,9 @@
         </div>
         <div class="status-row">
             <div class="status-buttons">
-                <button id="btn_lngi">Lngi & Analysis</button>
                 <button id="btn_progress">Progress</button>
-                <button id="btn_search_progress">Search Progress</button>
-                <button id="btn_search">Search</button>
-                <button id="btn_milestone">Milestone</button>
+                <button id="btn_search">Analyzer</button>
                 <button id="mountain_btn">Visualizer</button>
-                <button id="btn_buddy">Buddy</button>
-                <button id="btn_credits">Credits</button>
                 <button id="settings_btn">Settings</button>
             </div>
         </div>
@@ -52,40 +47,14 @@
         <div class="resize-handle"></div>
     </div>
 
-    <div class="analysis-toolbar" id="analysis_toolbar">
+    
 
-        <button id="analysis_add">Add</button>
-
-        <select id="analysis_add_type">
-            <option value="wY">ω-Y</option>
-            <option value="DBMS">DBMS</option>
-            <div class="SHO">
-                <option value="BMS">BMS</option>
-                <option value="2-shifted OCF">2-shifted OCF</option>
-                <option value="cOCF">cOCF</option>
-                <option value="EcOCF">Extended cOCF</option>
-                <option value="BcOCF">Bufed cOCF</option>
-                <option value="PMS">PMS</option>
-                <option value="AMS">AMS</option>
-                <option value="0Y">0-Y</option>
-                <option value="Vulcaniz">Vulcaniz</option>
-            </div>
-        </select>
-        <button id="btn_save_layout"
-            style="background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; margin-left: 15px;">Save
-            Layout</button>
-        <button id="btn_load_layout" style="background-color: #cce5ff; color: #004085; border: 1px solid #b8daff;">Load
-            Layout</button>
-
-    </div>
-
-    <div id="analysis_container"></div>
-
+    
     <div class="card milestone-header" id="milestone_header">
 
         <div class="header-row" id="search_progress_source_row" hidden>
             <span>
-                Progress of the ordinal searched in the Search tab:
+                Progress of the ordinal searched in the Analyzer tab:
                 <span id="search_progress_source"></span><br>
                 <small><i>Every bar is one term: it counts from its lowest value up to its highest one,
                     in the steps shown, until the term before it can increase. The values follow the
@@ -139,63 +108,10 @@
 
     <div id="future-milestone" hidden>
         <div class="fmilestone-box2">
-            <label>Search ordinal: <input type="text" id="search_input" oninput="search_time()"
+            <label>input ordinal: <input type="text" id="search_input" oninput="search_time()"
                     title="The analysis part shows this ordinal (1,1 when nothing valid is searched)"></label><br>
             <span id="search_result">Please insert ordinal!</span>
         </div>
-        <div class="fmilestone-box">
-
-            <h3>Day</h3>
-            <div>
-                <button data-day="-100" class="extreme_step">-100</button>
-                <button data-day="-10" class="high_step">-10</button>
-                <button data-day="-1" class="normal_step">-1</button>
-
-                <input type="date" id="mile_date">
-
-                <button data-day="1" class="normal_step">+1</button>
-                <button data-day="10" class="high_step">+10</button>
-                <button data-day="100" class="extreme_step">+100</button>
-            </div>
-
-            <div id="day_result"></div>
-
-            <hr>
-
-            <h3>Month</h3>
-            <div>
-                <button data-month="-100" class="extreme_step">-100</button>
-                <button data-month="-10" class="high_step">-10</button>
-                <button data-month="-1" class="normal_step">-1</button>
-
-                <input type="month" id="mile_month">
-
-                <button data-month="1" class="normal_step">+1</button>
-                <button data-month="10" class="high_step">+10</button>
-                <button data-month="100" class="extreme_step">+100</button>
-            </div>
-
-            <div id="month_result"></div>
-
-            <hr>
-
-            <h3>Year</h3>
-            <div>
-                <button data-year="-100" class="extreme_step">-100</button>
-                <button data-year="-10" class="high_step">-10</button>
-                <button data-year="-1" class="normal_step">-1</button>
-
-                <input type="number" id="mile_year" min="2025">
-
-                <button data-year="1" class="normal_step">+1</button>
-                <button data-year="10" class="high_step">+10</button>
-                <button data-year="100" class="extreme_step">+100</button>
-            </div>
-
-            <div id="year_result"></div>
-
-        </div>
-
         <div class="time-control-panel" style="visibility: hidden">
             <span bold>Time Dilation</span>
             <div style="display: flex">
@@ -219,6 +135,36 @@
             As compensation, here's an option to go back to that specific moment.
             <button onclick="go_2048()">Go!</button>
         </div>
+<div class="analysis-toolbar" id="analysis_toolbar">
+
+        <button id="analysis_add">Add</button>
+
+        <select id="analysis_add_type">
+            <option value="wY">ω-Y</option>
+            <option value="DBMS">DBMS</option>
+            <div class="SHO">
+                <option value="BMS">BMS</option>
+                <option value="2-shifted OCF">2-shifted OCF</option>
+                <option value="cOCF">cOCF</option>
+                <option value="EcOCF">Extended cOCF</option>
+                <option value="BcOCF">Bufed cOCF</option>
+                <option value="PMS">PMS</option>
+                <option value="AMS">AMS</option>
+                <option value="0Y">0-Y</option>
+                <option value="Vulcaniz">Vulcaniz</option>
+            </div>
+        </select>
+        <button id="btn_save_layout"
+            style="background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; margin-left: 15px;">Save
+            Layout</button>
+        <button id="btn_load_layout" style="background-color: #cce5ff; color: #004085; border: 1px solid #b8daff;">Load
+            Layout</button>
+
+    </div>
+
+    <div id="analysis_container"></div>
+
+    
     </div>
 
     <div id="mountain" hidden>
@@ -271,70 +217,11 @@
         </div>
     </div>
 
-    <div id="real_milestones" class="card" style="display: none; height: 100vh; overflow-y: auto;">
-        <div>
-            There are a total of <span id="milestone_length"></span> milestones.<br>
-            The next milestone is <span id="real_milestone_next"></span>
-        </div>
-        <div style="overflow-y: scroll;">
-            <div id="milestone_container" style="display: flex; flex-direction: column; gap: 8px;">
-            </div>
-        </div>
-    </div>
+    
 
-    <div id="buddy" class="card" style="display: none; height: 600px; overflow-y: auto;">
-        <div style="flex:1">
-            Your time spent in this LNGI made a new LNGI! Its value is now:<br>
-            <span id="buddy_next"></span> to next ordinal
-        </div>
-        <div style="flex:1"><span id="buddy_lngi"></span></div>
-    </div>
+    
 
-    <div class="card" style="text-align: center; display: none" id="credits">
-        <span style="font-size: 200%">Credits</span><br>
-        <i>To the people who made this possible</i><br>
-        <div style="display: flex; flex-direction: row; gap: 10px">
-            <div style="flex: 1; text-align: left">
-                <span style="font-size: 150%">The coders</span><hr>
-                Termiunsfinity > Internal logic, Buddy, Repository Owner<br>
-                Gomen520 > Weak Magma &omega;-Y expander<br>
-                <a href="https://rngdelak.github.io/link/">RNGDelak</a> > "Conversion" process, UI design<br>
-                Various people > Notations<br>
-                Naruyoko > whY mountain<br>
-                Some Chinese guy > Accurate Y to BMS conversion (optimized)<br>
-                CatIsFlurry > &omega;-Y to DBMS conversion algorithm (Past 1,3)<br>
-                Solarzone > &omega;-Y to DBMS conversion algorithm (Pre-1,3), <a href="https://solarzone1010.github.io/bms-analyzer-2">BMS to 2-shifted algorithm</a><br>
-                Decio > Minor Bugfixes<br>
-                <br>
-                Verity > He knows <i>everything</i>.
-            </div>
-            <div style="flex: 1; text-align: right;">
-                <div>
-                    <span style="font-size: 150%">The inspiration</span><hr>
-                    Dshamlin98 > LNGI videos<br>
-                    Myself > BMS LNGI (Please check it out! It's a very similar project, albeit with less features)<br>
-                </div><br><br>
-                <div>
-                    <span style="font-size: 150%">My afterthoughts</span><hr>
-                    This is it. The biggest project we have done.<br>
-                    Started around August 2025, I suddenly want to do an LNGI.<br>
-                    Not just <i>any</i> LNGI, a <i>global</i> LNGI.<br>
-                    Then with my (scratch) knowledge, I made <a href="https://scratch.mit.edu/projects/1238318045/">BMS LNGI (Classic)</a>, as it's the strongest notation available there.<br>
-                    It was the largest scratch project that I have made. All the skills converged.<br>
-                    But then, I wished for more.<br>
-                    Over time, I transitioned into website design, and did some projects.<br>
-                    That's when I wanted another global LNGI, with a stronger notation that LNGI.<br>
-                    And with that, <a href="https://mrredsharkfan.github.io/bms-lngi/interface.html">the real BMS LNGI</a> (discountinued though) and &omega;-Y LNGI is born.<br>
-                    With RNGDelak joining the team, we went through ups and downs<br>
-                    And bore such great fruit at the end.<br><br>
-                    But remember! This is definitely not the end of the project.<br>
-                    As googology progresses, stronger, more delicate notations will be made.<br>
-                    And when it comes, a stronger LNGI will be born again.<br>
-                    But now, just sit back, and relax!
-                </div>
-            </div>
-        </div>
-    </div>
+    
 
 
     <div id="settings_modal" class="modal">
@@ -403,7 +290,6 @@
 <script src="conv.js"></script>
 <script src="search.js"></script>
 <script src="lngi.js"></script>
-<script src="milestone.js"></script>
 <script src="visualizer.js"></script>
 <script src="final_load.js" defer></script>
 

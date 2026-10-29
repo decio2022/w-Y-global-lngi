@@ -79,7 +79,7 @@ function scratch_bar_init() {
 
 var lt = 0
 function update_scratch_bars(x, currentSimulatedTime, list = super_list) {
-    const draw = page == 1
+    const draw = false
     for (var i = 0; i < 53; i++) {
         if (i < list.length) {
             var u = x + list[i][2] / (2 ** list[i][1] / 2)
@@ -478,14 +478,29 @@ function renderAnalysisPanels() {
             card.remove(); // Removes node instantly without rebuilding the entire pane layout!
         };
 
+    if (page == 1) {
+        update_search_progress_bars()
+        update_search_progress_source()
+    }
+
         card.querySelector(".width").onchange = e => {
             panel.width = Number(e.target.value);
             card.style.flexBasis = `calc(${panel.width}% - ${(100 - panel.width) / 100 * 15}px)`;
         };
 
+    if (page == 1) {
+        update_search_progress_bars()
+        update_search_progress_source()
+    }
+
         card.querySelector(".notation").onchange = e => {
             panel.notation = e.target.value;
         };
+
+    if (page == 1) {
+        update_search_progress_bars()
+        update_search_progress_source()
+    }
 
         analysisContainer.appendChild(card);
         makeResizable(card, panel);
@@ -554,7 +569,7 @@ function update() {
         search_time()
     }
     if (page == 3 && sync_mountain.checked) { document.getElementById("input").value = trimStringList(u[2], MaxYTerms.valueAsNumber) }
-    if (page == 0) {
+    if (page == 2) {
         //the analysis part shows the sequence searched in the Search tab (1,1 if there's none)
         const analysis_seq = analysis_sequence();
         analysisPanels.forEach(panel => {
@@ -571,11 +586,12 @@ function update() {
             panel.element.innerHTML = txt;
         })
     };
-    if (page == 7) {
-        //search progress tab: one bar per term, always showing the amount of steps to update it
+
+    if (page == 1) {
         update_search_progress_bars()
         update_search_progress_source()
     }
+    
     const modifiedElapsedSeconds = Math.max(0, (virtualElapsed + timeOffset) / 1000);
     let timeStatusText = "";
     const trueElapsedSeconds = Math.max(0, (now - st) / 1000);
@@ -590,22 +606,18 @@ function update() {
     document.getElementById("time").innerHTML =
         `Time elapsed: ${formatSeconds(modifiedElapsedSeconds)}${timeStatusText}
         <br><small>You spent ${formatSeconds(player_time)} on this tab (${(player_time / (trueElapsedSeconds) * 100).toFixed(5)}% of the actual runtime)</small>`;
-    document.getElementById("time_mode").innerHTML = `${tt == 0 ? "Time remaining" : "Time reached"} (Press to change)`
+    if (document.getElementById("time_mode")) document.getElementById("time_mode").innerHTML = `${tt == 0 ? "Time remaining" : "Time reached"} (Press to change)`
 
     document.title = `ω-Y LNGI: <${super_list.slice(0, 6).at(-1)[0]}`
 
-    update_milestones(mpage)
+    // update_milestones(mpage) removed
 
     if (tps>1) player_time += 1 / tps
     if (player_time == NaN) {
         player_time = 0
     }
 
-    if (page == 5) {
-        var u2 = num_time(player_time * 1000 + st, false)
-        document.getElementById("buddy_lngi").innerHTML = u2[2]
-        document.getElementById("buddy_next").innerHTML = u2[0]
-    }
+    
 
     saveMisc()
     requestAnimationFrame(update);
