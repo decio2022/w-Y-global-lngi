@@ -357,7 +357,6 @@ function update() {
 
     if (page == 7) {
         update_scratch_bars(analysis_value(), simulatedTime, super_list, true);
-        update_search_progress_source()
     }
 
 
