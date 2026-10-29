@@ -172,16 +172,10 @@ const spd = 0.002001
 
 function get_time(t) {
     var R = (Math.log10(1 + t / 864000) / 2 + 2)
-    if (R > upg1) {
-        R = (((R - upg1) / (upg2 - upg1) * spd) ** exp) * (upg2 - upg1) + upg1
-    }
     return R
 }
 
 function get_time_inv(n) {
-    if (n > upg1) {
-        n = (((n - upg1) / (upg2 - upg1)) ** (1/exp)) / spd * (upg2 - upg1) + upg1
-    }
     var S = (10 ** ((n - 2) * 2) - 1) * 864000
     return S
 }
@@ -205,217 +199,6 @@ function analysis_sequence() {
 //The value of the searched ordinal (the value of 1,1 is 2)
 function analysis_value() {
     return (typeof searched_value == "number" && isFinite(searched_value)) ? searched_value : 2
-}
-
-//The ladder of ordinals leading to the next milestone, for the searched ordinal
-var searched_ladder = { value: null, list: [] }
-function searched_progress() {
-    const v = analysis_value()
-    if (searched_ladder.value !== v) {
-        const live_list = super_list
-        num_to_lngi(v) //fills super_list with the ladder of that value
-        searched_ladder = { value: v, list: super_list }
-        super_list = live_list //the live ladder must stay untouched
-    }
-    return searched_ladder
-}
-
-//says which ordinal the search progress tab is showing right now
-var search_progress_source_cache = null
-function update_search_progress_source() {
-    const el = document.getElementById("search_progress_source")
-    if (!el) return
-
-    const searched = typeof searched_ordinal == "string" && searched_ordinal != ""
-    const sp = searched_progress()
-    const milestone = sp.list.length && sp.list[0][0]
-    const total = milestone ? sp.list[sp.list.length - 1][1] : 0
-    const html = `<b>${searched ? searched_ordinal : "1,1"}</b>` +
-        (searched ? "" : ` <small><i>(nothing valid searched, using 1,1)</i></small>`) +
-        (milestone
-            ? ` <small>— next milestone ${safe_convert(milestone, scratch_bar_display)} in ${total} step${total == 1 ? "" : "s"}</small>`
-            : ` <small><i>— too large to walk</i></small>`)
-
-    if (search_progress_source_cache !== html) {
-        search_progress_source_cache = html
-        el.innerHTML = html
-    }
-}
-
-//"2nd", "3rd", ... for the search progress bars
-function ordinal_suffix(n) {
-    const s = ["th", "st", "nd", "rd"], v = n % 100
-    return n + (s[(v - 20) % 10] || s[v] || s[0])
-}
-
-//The path the searched ordinal walks to its next milestone, as the display shows it:
-//the ladder stages, refined with the fundamental-sequence chain of each stage
-//(that's the "1,2 -> 1,2,1,2,1,2 -> 1,2,2 -> 1,2,2,2 -> ..." growth).
-//Every entry is [sequence, ladder step]; the chains only run for short sequences,
-//so this stays cheap.
-function fine_path(sp) {
-    const stages = sp.list.slice().reverse()   //time order: the searched ordinal first
-    if (!stages.length) return []
-
-    const path = [[stages[0][0], stages[0][1]]]
-    let calls = 0
-
-    for (let i = 1; i < stages.length; i++) {
-        const A = stages[i - 1][0]
-        const B = stages[i][0]
-        const prev = stages[i - 1][1]          //step of the stage below this segment
-        let list = [A]
-
-        if (B.split(",").length <= 6) {
-            //deep first: fs(B, e) shrinks towards A as e grows
-            const chain = []
-            for (let e = 8; e >= 0 && calls < 120; e--) {
-                let x
-                try { x = Y_Sequence.fs(B, e); calls++ } catch (err) { break }
-                const c = Y_Sequence.cmp(x, A)
-                if (c < 0) continue   //not there yet, keep going down
-                if (c == 0) break     //that's the previous stage itself
-                if (x.split(",").length > 50) break
-                chain.push(x)
-            }
-            for (let c = chain.length - 1; c >= 0; c--) list.push(chain[c])
-        }
-        list.push(B)
-
-        //the sequence also grows by appending 1s, as long as its last term is 1
-        for (let j = 0; j < list.length; j++) {
-            const x = list[j]
-            //the last entry is the stage itself, the chain sits just below it
-            if (j > 0) path.push([x, x === B ? stages[i][1] : prev])
-            const t = x.split(",")
-            if (t[t.length - 1] !== "1") continue
-            for (let k = 1; k <= 6; k++) {
-                const cand = x + ",1".repeat(k)
-                if (j + 1 < list.length && Y_Sequence.cmp(cand, list[j + 1]) >= 0) break
-                path.push([cand, x === B ? stages[i][1] : prev])
-            }
-        }
-    }
-
-    return path
-}
-
-//For the searched ordinal, one entry per term: the lowest possible value and the maximum
-//value the term takes until the term before it can increase, walking the display path.
-//A term that isn't there yet is created as 1 (that's how the sequence grows).
-function term_progress(sp) {
-    const stages = sp.list.slice().reverse()   //time order: the searched ordinal first
-    const path = fine_path(sp)
-    if (!path.length || !stages.length) return []
-
-    const total = stages[0][1]     //ladder steps of the searched ordinal (counted down to the milestone)
-    const progress = []
-
-    for (let term = 2; term <= 50; term++) {
-        let born = null, min = null, max = null, max_ord = null, steps = null, end_ord = null
-
-        for (let i = 0; i < path.length; i++) {
-            const t = path[i][0].split(",").map(Number)
-
-            if (born === null) {
-                //the term exists once the sequence is long enough; it is created as 1
-                if (t.length >= term) { born = i; min = max = t[term - 1]; max_ord = path[i][0] }
-                continue
-            }
-
-            const parent_at_birth = path[born][0].split(",").map(Number)[term - 2]
-
-            //the window ends when the term before it can increase
-            if (term > 2 && t.length >= term - 1 && t[term - 2] > parent_at_birth) {
-                steps = total - path[i][1]
-                end_ord = path[i][0]
-                break
-            }
-
-            //a term only counts on the steps where the sequence is long enough to show it
-            if (t.length >= term) {
-                if (t[term - 1] < min) min = t[term - 1]
-                if (t[term - 1] > max) { max = t[term - 1]; max_ord = path[i][0] }
-            }
-        }
-
-        //one slot per term, so that a bar always belongs to the same term
-        if (born === null) { progress.push(null); continue }
-        if (min === max && steps === 0) { progress.push(null); continue }   //nothing happens with it
-        if (steps === null) {
-            steps = total                                  //no earlier stop: the next milestone
-            end_ord = stages[stages.length - 1][0]
-        }
-        progress.push({ term, min, max, steps, max_ord: max_ord || path[born][0], end_ord })
-    }
-
-    return progress
-}
-
-var searched_term_progress = { value: null, list: [] }
-function searched_progress_terms() {
-    const sp = searched_progress()
-    if (searched_term_progress.value !== sp.value) {
-        searched_term_progress = { value: sp.value, list: term_progress(sp) }
-    }
-    return searched_term_progress.list
-}
-
-//The search progress bars: one bar per term of the searched ordinal
-//(the first bar is the 2nd term). Each one shows the values that term runs through,
-//from where it starts up to the moment the term before it can increase.
-//Unlike the live bars these never change, so the drawing is only redone when
-//the searched ordinal or the notation changes.
-var search_progress_cache = { key: null, bars: [] }
-function search_progress_bars() {
-    const sp = searched_progress()
-    const key = `${sp.value}|${scratch_bar_display}`
-    if (search_progress_cache.key !== key) {
-        const progress = searched_progress_terms()
-        const max = progress.reduce((m, u) => Math.max(m, u ? u.steps : 0), 0)
-
-        search_progress_cache = {
-            key: key,
-            bars: progress.map(u => {
-                if (!u) return null
-                const range = u.min == u.max ? `${u.min}` : `${u.min} → ${u.max}`
-                const until = u.term > 2 ? `until the ${ordinal_suffix(u.term - 1)} term can increase` : `until the next milestone`
-                return {
-                    html: `${ordinal_suffix(u.term)} term: <b>${range}</b> <small>(${u.steps} step${u.steps == 1 ? "" : "s"}, ${until})</small>`,
-                    title: `${ordinal_suffix(u.term)} term: ${range}` +
-                        (u.max > u.min ? ` (it reaches ${u.max} at ${safe_convert(u.max_ord, scratch_bar_display)})` : "") +
-                        `, ${u.steps} step${u.steps == 1 ? "" : "s"} ${until}` +
-                        (u.end_ord ? `, at ${safe_convert(u.end_ord, scratch_bar_display)}` : ""),
-                    width: `${max > 0 ? (u.steps / max) * 100 : 100}%`,
-                    color: `hsl(${u.steps * 10},100%,90%)`
-                }
-            })
-        }
-    }
-    return search_progress_cache.bars
-}
-
-function update_search_progress_bars() {
-    const bars = search_progress_bars();
-
-    for (var i = 0; i < 53; i++) {
-        const bar = document.getElementById(`bar_${i}`)
-        const b = bars[i]
-
-        if (!b) {
-            //terms that don't get updated before the next milestone have no bar
-            bar.style.visibility = "hidden"
-            bar.innerHTML = ""
-            bar.title = ""
-            continue
-        }
-
-        bar.style.visibility = "visible"
-        bar.style.width = b.width
-        bar.style.backgroundColor = b.color
-        bar.innerHTML = b.html
-        bar.title = b.title
-    }
 }
 
 function renderAnalysisPanels() {
@@ -515,7 +298,7 @@ function num_time(t,update_main_bar=true) {
         if (update_main_bar) {
 
             document.getElementById("main_lngi_bar").style.width = `${(1 - j[1]) * 100}%`
-            update_scratch_bars(u, t, super_list, page == 1)
+            update_scratch_bars(search_time[0], t, super_list, page == 1)
 
             document.getElementById("main_lngi_bar").style.backgroundColor = lt / j[1] < 1 ? `hsl(100,90%,70%)` : `hsl(${(1 - j[1]) * 100},90%,70%)`
         }
