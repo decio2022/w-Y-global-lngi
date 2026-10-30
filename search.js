@@ -116,12 +116,23 @@ function changeDay(n) {
 function changeMonth(n) {
 
     const e = document.getElementById("mile_month");
+    const value = e.value;
 
-    const d = new Date(e.value + "-01");
+    if (!value) {
+        return;
+    }
 
-    d.setMonth(d.getMonth() + n);
+    const [year, month] = value.split("-").map(Number);
 
-    e.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+        return;
+    }
+
+    const monthIndex = year * 12 + (month - 1) + n;
+    const nextYear = Math.floor(monthIndex / 12);
+    const nextMonth = ((monthIndex % 12) + 12) % 12 + 1;
+
+    e.value = `${nextYear}-${String(nextMonth).padStart(2, "0")}`;
 
     updateMonth();
 }
