@@ -78,32 +78,30 @@ function scratch_bar_init() {
 }
 
 var lt = 0
-function update_scratch_bars(x, currentSimulatedTime, list = super_list, draw = false) {
-    
+function update_scratch_bars(x, currentSimulatedTime) {
     for (var i = 0; i < 53; i++) {
-        if (i < list.length) {
-            var u = x + list[i][2] / (2 ** list[i][1] / 2)
+        if (i < super_list.length) {
+            var u = x + super_list[i][2] / (2 ** super_list[i][1] / 2)
             if (i == 0) {
-                //the top bar is the next integer milestone (an exact value steps one further)
-                u = x % 1 == 0 ? x + 1 : Math.ceil(x)
+                u = Math.ceil(x)
             }
             
             var t = get_time_inv(u)
             const secondsLeft = Math.max(0, ((t + st) - currentSimulatedTime) / 1000);
 
-            if (draw) {
+            if (page == 1) {
                 document.getElementById(`bar_${i}`).style.visibility = "visible"
                 document.getElementById(`bar_${i}`).innerHTML =
-                    `${safe_convert(list[i][0] + (i == list.length - 1 ? ",1" : ""), scratch_bar_display)} <small>(${((1 - list[i][2]) * 100).toFixed(2)}% / 
+                    `${convert_From_wY(super_list[i][0] + (i == super_list.length - 1 ? ",1" : ""), scratch_bar_display)} <small>(${((1 - super_list[i][2]) * 100).toFixed(2)}% / 
                 ${tt == 0 ? `${formatSeconds(secondsLeft)} left` : `in ${new Date(secondsLeft * 1000 + currentSimulatedTime).toLocaleString()}`})</small>`
 
-                document.getElementById(`bar_${i}`).style.backgroundColor = `hsl(${list[i][1] * 10},100%,90%)`
-                document.getElementById(`bar_${i}`).style.width = `${(1 - list[i][2]) * 100}%`
+                document.getElementById(`bar_${i}`).style.backgroundColor = `hsl(${super_list[i][1] * 10},100%,90%)`
+                document.getElementById(`bar_${i}`).style.width = `${(1 - super_list[i][2]) * 100}%`
             }
-            if (i + 1 == list.length && list === super_list) {
+            if (i + 1 == super_list.length) {
                 lt = secondsLeft
             }
-        } else if (draw) {
+        } else {
             document.getElementById(`bar_${i}`).style.visibility = "hidden"
         }
     }
@@ -298,11 +296,11 @@ function num_time(t,update_main_bar=true) {
         if (update_main_bar) {
 
             document.getElementById("main_lngi_bar").style.width = `${(1 - j[1]) * 100}%`
-            update_scratch_bars(search_time[0], t, super_list, page == 1)
+            update_scratch_bars(search_time()[0], t)
 
             document.getElementById("main_lngi_bar").style.backgroundColor = lt / j[1] < 1 ? `hsl(100,90%,70%)` : `hsl(${(1 - j[1]) * 100},90%,70%)`
         }
-        return [`${((1 - j[1]) * 100).toFixed(3)}%`, formatSeconds(lt), search_time()[0]]
+        return [`${((1 - j[1]) * 100).toFixed(3)}%`, formatSeconds(lt), get_time_inv(search_time()[0])]
     }
 }
 
