@@ -78,7 +78,7 @@ function scratch_bar_init() {
 }
 
 var lt = 0
-function update_scratch_bars(x, currentSimulatedTime) {
+function update_scratch_bars(x) {
     for (var i = 0; i < 53; i++) {
         if (i < super_list.length) {
             var u = x + super_list[i][2] / (2 ** super_list[i][1] / 2)
@@ -87,19 +87,14 @@ function update_scratch_bars(x, currentSimulatedTime) {
             }
             
             var t = get_time_inv(u)
-            const secondsLeft = Math.max(0, ((t + st) - currentSimulatedTime) / 1000);
 
             if (page == 1) {
                 document.getElementById(`bar_${i}`).style.visibility = "visible"
                 document.getElementById(`bar_${i}`).innerHTML =
-                    `${convert_From_wY(super_list[i][0] + (i == super_list.length - 1 ? ",1" : ""), scratch_bar_display)} <small>(${((1 - super_list[i][2]) * 100).toFixed(2)}% / 
-                ${tt == 0 ? `${formatSeconds(secondsLeft)} left` : `in ${new Date(secondsLeft * 1000 + currentSimulatedTime).toLocaleString()}`})</small>`
+                    `${convert_From_wY(super_list[i][0] + (i == super_list.length - 1 ? ",1" : ""), scratch_bar_display)} <small>(${((1 - super_list[i][2]) * 100).toFixed(2)}%`
 
                 document.getElementById(`bar_${i}`).style.backgroundColor = `hsl(${super_list[i][1] * 10},100%,90%)`
                 document.getElementById(`bar_${i}`).style.width = `${(1 - super_list[i][2]) * 100}%`
-            }
-            if (i + 1 == super_list.length) {
-                lt = secondsLeft
             }
         } else {
             document.getElementById(`bar_${i}`).style.visibility = "hidden"
@@ -296,7 +291,7 @@ function num_time(t,update_main_bar=true) {
         if (update_main_bar) {
 
             document.getElementById("main_lngi_bar").style.width = `${(1 - j[1]) * 100}%`
-            update_scratch_bars(search_time()[0], t)
+            update_scratch_bars(search_time()[0])
 
             document.getElementById("main_lngi_bar").style.backgroundColor = lt / j[1] < 1 ? `hsl(100,90%,70%)` : `hsl(${(1 - j[1]) * 100},90%,70%)`
         }
