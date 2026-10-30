@@ -317,7 +317,7 @@ function update() {
     if (get_time(simulatedTime - st) > 4) {
         const q = document.getElementsByClassName("SHO")
         for (var i in q) {
-            q[i].hidden = true
+            q[i].hidden = false
         }
     }
 
