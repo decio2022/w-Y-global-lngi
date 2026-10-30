@@ -302,7 +302,7 @@ function num_time(t,update_main_bar=true) {
 
             document.getElementById("main_lngi_bar").style.backgroundColor = lt / j[1] < 1 ? `hsl(100,90%,70%)` : `hsl(${(1 - j[1]) * 100},90%,70%)`
         }
-        return [`${((1 - j[1]) * 100).toFixed(3)}%`, formatSeconds(lt), j[0]]
+        return [`${((1 - j[1]) * 100).toFixed(3)}%`, formatSeconds(lt), search_time()[0]]
     }
 }
 
