@@ -502,7 +502,7 @@ function update() {
     tps = 1000 / (now - last_tick);
     last_tick = now;
     var deltaRealTime = now - lastRealTime;
-    virtualElapsed += deltaRealTime*(pause%2)
+    virtualElapsed += deltaRealTime*(pause%2)*milestoneMulti
     lastRealTime = now;
     var simulatedTime = st + virtualElapsed + timeOffset;
     var u = num_time(simulatedTime);
