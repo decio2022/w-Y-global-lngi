@@ -356,12 +356,12 @@ const ORDINAL_WALK_CAP = [1, 3]
 //the term limit the last press used, so a change in Max ω-Y Terms restarts at 1,1
 var ordinal_walk_max = null
 
-//Max ω-Y Terms, as read by the +1 button. 0 (the "no limit" value used by the
-//visualizer) and 1 both mean unlimited: the sequence just keeps growing 1s.
+//Max ω-Y Terms, as read by the +1 button. Values below 2 use a minimum
+//of 2 terms, since the walk starts at 1,1.
 function ordinal_walk_limit() {
     const el = (typeof MaxYTerms != "undefined" && MaxYTerms) ? MaxYTerms : document.getElementById("MaxTerms")
     const n = el ? Number(el.value) : 0
-    return (isFinite(n) && n >= 2) ? Math.floor(n) : Infinity
+    return isFinite(n) ? Math.max(2, Math.floor(n)) : 2
 }
 
 //true when a is at most b, in ω-Y order
