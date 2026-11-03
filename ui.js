@@ -189,6 +189,7 @@ function saveAllSettings() {
         // Performance Settings
         Y_Terms: Number(document.getElementById("Y_Terms").value),
         BMS_Terms: Number(document.getElementById("BMS_Terms").value),
+        ordinal_walk_max_terms: Number(document.getElementById("ordinal_walk_max_terms").value),
 
         // Milestone Settings
         Scratch_bar_height: (document.getElementById("Scratch_bar_height") ? Number(document.getElementById("Scratch_bar_height").value) : 24),
@@ -253,6 +254,7 @@ function loadAllSettings() {
         setCheck("format_cOCF", settings.format_cOCF);
         setVal("Y_Terms", settings.Y_Terms);
         setVal("BMS_Terms", settings.BMS_Terms);
+        setVal("ordinal_walk_max_terms", settings.ordinal_walk_max_terms);
         setVal("Scratch_bar_height", settings.Scratch_bar_height);
         setVal("ROWHEIGHT", settings.ROWHEIGHT);
         setVal("COLUMNWIDTH", settings.COLUMNWIDTH);
@@ -281,7 +283,7 @@ function loadAllSettings() {
 function attachAutoSaveListeners() {
     const selectorIds = [
         "font_family", "font_size", "compress_bms", "format_cOCF",
-        "Y_Terms", "BMS_Terms", "Scratch_bar_height", 
+        "Y_Terms", "BMS_Terms", "ordinal_walk_max_terms", "Scratch_bar_height",
         "ROWHEIGHT", "COLUMNWIDTH", "LINETHICKNESS", "NUMBERSIZE", "NUMBERTHICKNESS",
         "MAXDIMENSIONS", "MaxTerms", "STACKMODE", "HIGHLIGHT", "EXTRADIVIDER", "_UPDATEMODE"
     ];

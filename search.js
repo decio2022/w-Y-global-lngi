@@ -341,7 +341,7 @@ window.addEventListener("DOMContentLoaded", () => {
 //
 // It walks the standard ω-Y sequences in increasing order, always starting at
 // 1,1 and never going past 1,3:
-//   · while the sequence is shorter than Max ω-Y Terms, append a 1
+//   · while the sequence is shorter than the +1 maximum terms, append a 1
 //   · once it hits that length, add 1 to the last term; if the result isn't a
 //     standard sequence, drop that term and carry the +1 to the new last term,
 //     repeating until some term change gives a standard sequence
@@ -353,14 +353,14 @@ window.addEventListener("DOMContentLoaded", () => {
 
 //the highest sequence the button ever reaches
 const ORDINAL_WALK_CAP = [1, 3]
-//the term limit the last press used, so a change in Max ω-Y Terms restarts at 1,1
+//the term limit the last press used, so a change restarts the walk at 1,1
 var ordinal_walk_max = null
 
-//Max ω-Y Terms, as read by the +1 button. Values below 2 use a minimum
-//of 2 terms, since the walk starts at 1,1.
+//The +1 walk's own term limit. Values below 2 use a minimum of 2 terms,
+//since the walk starts at 1,1.
 function ordinal_walk_limit() {
-    const el = (typeof MaxYTerms != "undefined" && MaxYTerms) ? MaxYTerms : document.getElementById("MaxTerms")
-    const n = el ? Number(el.value) : 0
+    const el = document.getElementById("ordinal_walk_max_terms")
+    const n = el ? Number(el.value) : 2
     return isFinite(n) ? Math.max(2, Math.floor(n)) : 2
 }
 
@@ -442,8 +442,8 @@ function ordinal_walk_current() {
 
 function ordinal_plus_one() {
     const input = document.getElementById("search_input")
-    const limitInput = (typeof MaxYTerms != "undefined" && MaxYTerms) ? MaxYTerms : document.getElementById("MaxTerms")
-    const limitValue = limitInput ? limitInput.value : "0"
+    const limitInput = document.getElementById("ordinal_walk_max_terms")
+    const limitValue = limitInput ? limitInput.value : "2"
     const max = ordinal_walk_limit()
     //Avoid inspecting an old input when a changed limit already requires a reset.
     const current = ordinal_walk_max === limitValue ? ordinal_walk_current() : null

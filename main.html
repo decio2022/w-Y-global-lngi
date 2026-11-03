@@ -114,7 +114,12 @@
                 <input type="text" id="search_input" oninput="search_time()"
                     title="The analysis part shows this ordinal (1,1 when nothing valid is searched)">
                 <button type="button" id="ordinal_plus_one" onclick="ordinal_plus_one()"
-                    title="Walk the ω-Y sequences: start at 1,1, append 1s up to Max ω-Y Terms (minimum 2), then carry to the next standard sequence. 1,3 is the ceiling and wraps back to 1,1.">+1</button>
+                    title="Walk standard ω-Y sequences up to the maximum number of terms. After 1,3, start again at 1,1.">+1</button>
+            </div>
+            <div class="ordinal-walk-settings">
+                <label for="ordinal_walk_max_terms">Maximum terms for +1:</label>
+                <input id="ordinal_walk_max_terms" type="number" min="2" step="1" value="10"
+                    title="The +1 walk uses at least two terms and restarts when this value changes.">
             </div>
             <span id="search_result">Please insert ordinal!</span>
         </div>

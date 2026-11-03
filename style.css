@@ -514,6 +514,17 @@ h2 {
     min-width: 0;
 }
 
+.ordinal-walk-settings {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+#ordinal_walk_max_terms {
+    width: 5em;
+}
+
 #ordinal_plus_one {
     flex: 0 0 auto;
     padding: 4px 12px;
