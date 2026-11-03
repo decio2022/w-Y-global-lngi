@@ -355,6 +355,8 @@ window.addEventListener("DOMContentLoaded", () => {
 const ORDINAL_WALK_CAP = [1, 3]
 //the term limit the last press used, so a change restarts the walk at 1,1
 var ordinal_walk_max = null
+//variable tracking the number of +1 presses
+var Posts = 0
 
 //The +1 walk's own term limit. Values below 2 use a minimum of 2 terms,
 //since the walk starts at 1,1.
@@ -455,7 +457,128 @@ function ordinal_plus_one() {
     input.value = next.join(",")
     //same path as typing it: refreshes the result, the analysis part and the saved input
     search_time()
+
+    //increase Posts variable and update display
+    Posts++
+    const postsEl = document.getElementById("posts_display")
+    if (postsEl) postsEl.innerHTML = `Posts: ${Posts}`
+
+    //update progress revamp
+    update_progress_revamp()
 }
+
+function update_progress_revamp() {
+    const contentEl = document.getElementById("progress_revamp_content")
+    if (!contentEl) return
+
+    const maxTerms = ordinal_walk_limit()
+    const cap = ORDINAL_WALK_CAP
+
+    // Calculate clicks needed to reach 1,3 from 1,1 based on maxTerms
+    // Sequence of standard walks:
+    // length 2: 1,1 -> 1,2 -> 1,3 (2 clicks)
+    // length 3: 1,1 -> 1,1,1 -> 1,2 -> 1,3 (3 clicks)
+    // length N: N-1 clicks to append 1s, then 2 clicks to go 1,N-1,1 -> 1,2 -> 1,3
+    // Wait, the rule is:
+    //   · while the sequence is shorter than the +1 maximum terms, append a 1
+    //   · once it hits that length, add 1 to the last term; if the result isn't a
+    //     standard sequence, drop that term and carry the +1 to the new last term,
+    //     repeating until some term change gives a standard sequence
+    //   · 1,3 is the ceiling: the press after it wraps back to 1,1
+    // So with limit 2: 1,1 -> 1,2 -> 1,3 (2 clicks)
+    // limit 3: 1,1 -> 1,1,1 -> 1,2 -> 1,3 (3 clicks)
+    // limit N: (N-1) clicks to reach 1,1,1...1 (N terms)
+    // Then: 1,1,1...1 -> 1,2 (1 click)
+    // Then: 1,2 -> 1,3 (1 click)
+    // Total clicks to reach 1,3 = (N-1) + 1 + 1 = N + 1
+    const clicksToCap = maxTerms + 1
+
+    let html = `<div><b>Clicks needed to reach 1,3 (limit ${maxTerms}): ${clicksToCap}</b></div>`
+
+    // Calculate clicks needed to maximize the 3rd term by +1, then 4th, etc.
+    // For term k (k >= 3), maximizing it by +1 from 1,1...1 (k-1 ones) means:
+    // 1,1,1...1 (k-1 ones) -> 1,1,1...1 (k terms) -> ... -> 1,2 -> 1,3
+    // Actually, let's trace standard walk logic:
+    // 1,1 -> 1,2 -> 1,3 (limit 2)
+    // 1,1,1 -> 1,1,2 -> 1,2 -> 1,3 (limit 3) -- wait, 1,1,2 is standard?
+    // Let's use the actual ordinal_walk_next logic to trace steps.
+    // We'll simulate the walk from 1,1 up to the cap [1,3] for the given maxTerms.
+    
+    let current = [1, 1]
+    let steps = 0
+    let clicksForTerm = {} // termIndex -> clicks needed to reach that term's +1 maximization
+    
+    // Simulate the walk to find when each term k (k=3,4,...) is maximized by +1
+    // "maximize the third term by +1" means reaching [1, 1, 3] (if maxTerms >= 3)
+    // "maximize the fourth term by +1" means reaching [1, 1, 1, 3] (if maxTerms >= 4)
+    // etc.
+    
+    // Since we want "amount of clicks need for maximize the third term by +1"
+    // starting from 1,1 (which is current state), we simulate:
+    let simCurrent = [1, 1]
+    let simSteps = 0
+    
+    // We'll track the first time we hit [1, 1, 3] (term 3 max), [1, 1, 1, 3] (term 4 max), etc.
+    // up to maxTerms.
+    let targets = {}
+    for (let k = 3; k <= maxTerms; k++) {
+        let target = [1]
+        for (let i = 1; i < k - 1; i++) target.push(1)
+        target.push(3) // maximize the k-th term by +1 (reaching 1,3 at the end)
+        targets[k] = target
+    }
+    
+    let found = {}
+    let simLimit = maxTerms
+    
+    // Run simulation up to the cap [1,3]
+    while (true) {
+        let next = ordinal_walk_next(simCurrent, simLimit)
+        simSteps++
+        simCurrent = next
+        
+        // Check if we hit any target
+        for (let k in targets) {
+            if (!found[k]) {
+                let t = targets[k]
+                if (simCurrent.length === t.length && simCurrent.every((v, i) => v === t[i])) {
+                    found[k] = simSteps
+                }
+            }
+        }
+        
+        // Stop if we reached 1,3 (the cap)
+        if (simCurrent.length === 2 && simCurrent[0] === 1 && simCurrent[1] === 3) {
+            break
+        }
+        // Safety break
+        if (simSteps > 1000) break
+    }
+    
+    for (let k = 3; k <= maxTerms; k++) {
+        let clicks = found[k] !== undefined ? found[k] : "N/A"
+        html += `<div>Clicks to maximize ${k}-th term by +1: ${clicks}</div>`
+    }
+
+    contentEl.innerHTML = html
+}
+
+// Initialize progress revamp on load
+window.addEventListener("DOMContentLoaded", () => {
+    update_progress_revamp()
+    // Restore Posts from localStorage if available
+    const savedPosts = localStorage.getItem("lngi_app_posts")
+    if (savedPosts) {
+        Posts = Number(savedPosts)
+        const postsEl = document.getElementById("posts_display")
+        if (postsEl) postsEl.innerHTML = `Posts: ${Posts}`
+    }
+})
+
+// Save Posts on every +1 press (already done in ordinal_plus_one) and on unload
+window.addEventListener("beforeunload", () => {
+    localStorage.setItem("lngi_app_posts", Posts)
+})
 
 function go_2048() {
     document.getElementById('sex').value = '1,2,4,8,16,32,64,128,256,512,1024,2048'

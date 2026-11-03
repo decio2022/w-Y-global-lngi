@@ -99,10 +99,7 @@ if (btn_progress) {
 
 const btn_search_progress = document.getElementById("btn_search_progress");
 if (btn_search_progress) {
-    btn_search_progress.addEventListener("click", () => {
-        page = 7;
-        update_page()
-    });
+    btn_search_progress.remove();
 }
 
 const btn_search = document.getElementById("btn_search");
@@ -128,9 +125,8 @@ btn_mountain.addEventListener("click", () => {
 
 
 function update_page() {
-    if (document.getElementById("milestone_header")) document.getElementById("milestone_header").style.display = (page == 1 || page == 7) ? "flex" : "none"
-    if (document.getElementById("scratch_bars")) document.getElementById("scratch_bars").hidden = (page != 1 && page != 7)
-    if (document.getElementById("search_progress_source_row")) document.getElementById("search_progress_source_row").hidden = (page != 7)
+    if (document.getElementById("milestone_header")) document.getElementById("milestone_header").style.display = (page == 1) ? "flex" : "none"
+    if (document.getElementById("scratch_bars")) document.getElementById("scratch_bars").hidden = (page != 1)
     if (document.getElementById("future-milestone")) {
         document.getElementById("future-milestone").hidden = (page != 2)
         document.getElementById("future-milestone").style.display = page == 2 ? "flex" : "none"
@@ -210,6 +206,9 @@ function saveAllSettings() {
         HIGHLIGHT: document.getElementById("HIGHLIGHT").checked,
         EXTRADIVIDER: document.getElementById("EXTRADIVIDER").checked,
         _UPDATEMODE: document.getElementById("_UPDATEMODE").checked,
+
+        // Posts counter
+        Posts: typeof Posts !== 'undefined' ? Posts : 0
     };
     localStorage.setItem("lngi_app_settings", JSON.stringify(settings));
 }
@@ -267,6 +266,13 @@ function loadAllSettings() {
         setCheck("HIGHLIGHT", settings.HIGHLIGHT);
         setCheck("EXTRADIVIDER", settings.EXTRADIVIDER);
         setCheck("_UPDATEMODE", settings._UPDATEMODE);
+
+        // Restore Posts variable
+        if (typeof Posts !== 'undefined' && settings.Posts !== undefined) {
+            Posts = Number(settings.Posts);
+            const postsEl = document.getElementById("posts_display");
+            if (postsEl) postsEl.innerHTML = `Posts: ${Posts}`;
+        }
 
         // Trigger existing CSS rule updates
         if (typeof updatefontfamily === "function") updatefontfamily();
