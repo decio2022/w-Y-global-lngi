@@ -336,6 +336,127 @@ window.addEventListener("DOMContentLoaded", () => {
     search_time()
 })
 
+// ---------------------------------------------------------------------------
+// The "+1" button next to the input ordinal.
+//
+// It walks the standard ω-Y sequences in increasing order, always starting at
+// 1,1 and never going past 1,3:
+//   · while the sequence is shorter than Max ω-Y Terms, append a 1
+//   · once it hits that length, add 1 to the last term; if the result isn't a
+//     standard sequence, drop that term and carry the +1 to the new last term,
+//     repeating until some term change gives a standard sequence
+//   · 1,3 is the ceiling: the press after it wraps back to 1,1
+// So with a limit of 5 terms it goes
+//   1,1 → 1,1,1 → 1,1,1,1 → 1,1,1,1,1 → 1,2
+// (1,1,1,1,2 / 1,1,1,2 / 1,1,2 are all non-standard, 1,2 is the first hit).
+// ---------------------------------------------------------------------------
+
+//the highest sequence the button ever reaches
+const ORDINAL_WALK_CAP = [1, 3]
+//the term limit the last press used, so a change in Max ω-Y Terms restarts at 1,1
+var ordinal_walk_max = null
+
+//Max ω-Y Terms, as read by the +1 button. 0 (the "no limit" value used by the
+//visualizer) and 1 both mean unlimited: the sequence just keeps growing 1s.
+function ordinal_walk_limit() {
+    const el = (typeof MaxYTerms != "undefined" && MaxYTerms) ? MaxYTerms : document.getElementById("MaxTerms")
+    const n = el ? Number(el.value) : 0
+    return (isFinite(n) && n >= 2) ? Math.floor(n) : Infinity
+}
+
+//true when a is at most b, in ω-Y order
+function ordinal_walk_le(a, b) {
+    return Y_Sequence.cmp(a.join(","), b.join(",")) <= 0
+}
+
+//Standardness of a ω-Y sequence, mirroring the check inside search_time() but
+//without touching the page: expand `1,(second term + 1)` and compare term by
+//term — a term bigger than the expansion allows means the sequence isn't standard.
+function ordinal_walk_standard(l) {
+    if (l.length < 2) return false
+    if (l[0] != 1 || l.some(p => !Number.isInteger(p) || p <= 0)) return false
+    if (l.length == 2) return true
+
+    var seq = `1,${l[1] + 1}`
+    var check = 2
+    var safe = 1
+
+    while (true) {
+        var aseq = seq
+        var expanded
+        try {
+            expanded = String(Y_Sequence.fs(seq, safe + 1)).split(",").slice(0, check + safe).map(Number)
+        } catch (e) {
+            return false
+        }
+        //the expansion has to be long enough to cover the term being checked
+        if (expanded.length < check + safe) return false
+
+        var d = expanded[check + safe - 1] - l[check + safe - 1]
+        if (!isFinite(d) || d < 0) return false
+
+        if (d != 0) {
+            expanded[check + safe - 1] = l[check + safe - 1] + 1
+            seq = expanded.join(",")
+            check += safe
+            safe = 1
+        } else {
+            seq = aseq
+            safe++
+        }
+
+        if (check + safe - 1 >= l.length) return true
+    }
+}
+
+//the sequence after `seq`, following the +1 rules above
+function ordinal_walk_next(seq, max) {
+    //still room for another term: appending 1 always keeps a sequence standard
+    if (seq.length < max) {
+        const grown = seq.concat([1])
+        return ordinal_walk_le(grown, ORDINAL_WALK_CAP) ? grown : [1, 1]
+    }
+
+    //no room left: try to raise the last term, carrying left while it's invalid
+    var carry = seq.slice()
+    while (carry.length >= 2) {
+        const raised = carry.slice()
+        raised[raised.length - 1]++
+        if (raised.length <= max && ordinal_walk_le(raised, ORDINAL_WALK_CAP) && ordinal_walk_standard(raised)) return raised
+        carry.pop()
+    }
+
+    //nothing below the cap is left (we were at 1,3): start over
+    return [1, 1]
+}
+
+//what the input currently holds, or null when it isn't a sequence the walk can
+//continue from (empty, malformed, non-standard or already past 1,3)
+function ordinal_walk_current() {
+    const t = String(document.getElementById("search_input").value ?? "").trim()
+    if (!/^\d+(\s*,\s*\d+)*$/.test(t)) return null
+    const l = t.split(",").map(p => Number(p.trim()))
+    if (l.length < 2 || !ordinal_walk_le(l, ORDINAL_WALK_CAP)) return null
+    return ordinal_walk_standard(l) ? l : null
+}
+
+function ordinal_plus_one() {
+    const input = document.getElementById("search_input")
+    const limitInput = (typeof MaxYTerms != "undefined" && MaxYTerms) ? MaxYTerms : document.getElementById("MaxTerms")
+    const limitValue = limitInput ? limitInput.value : "0"
+    const max = ordinal_walk_limit()
+    //Avoid inspecting an old input when a changed limit already requires a reset.
+    const current = ordinal_walk_max === limitValue ? ordinal_walk_current() : null
+
+    //a changed term limit restarts the walk, and so does anything we can't continue from
+    const next = current ? ordinal_walk_next(current, max) : [1, 1]
+
+    ordinal_walk_max = limitValue
+    input.value = next.join(",")
+    //same path as typing it: refreshes the result, the analysis part and the saved input
+    search_time()
+}
+
 function go_2048() {
     document.getElementById('sex').value = '1,2,4,8,16,32,64,128,256,512,1024,2048'
     specific_time()

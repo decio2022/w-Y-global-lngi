@@ -496,6 +496,43 @@ h2 {
     min-height: 100px;
 }
 
+/* input ordinal + its "+1" walker button */
+.ordinal-input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+.ordinal-input-row label {
+    white-space: nowrap;
+}
+
+.ordinal-input-row #search_input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+#ordinal_plus_one {
+    flex: 0 0 auto;
+    padding: 4px 12px;
+    border: 1px solid #bbb;
+    border-radius: 4px;
+    background: #ffeeaa;
+    cursor: pointer;
+    white-space: nowrap;
+    font-weight: bold;
+}
+
+#ordinal_plus_one:hover {
+    background: #ffe680;
+}
+
+#ordinal_plus_one:active {
+    background: #ffd84d;
+}
+
 .time-control-panel {
     margin: 0;
     /* remove the extra spacing */
