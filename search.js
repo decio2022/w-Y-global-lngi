@@ -334,6 +334,8 @@ window.addEventListener("DOMContentLoaded", () => {
     const saved = localStorage.getItem("lngi_searched_input")
     if (input && saved) input.value = saved
     search_time()
+    //pick the +1 walk back up where it was left (sequence and click count)
+    ordinal_walk_restore()
 })
 
 // ---------------------------------------------------------------------------
@@ -349,12 +351,26 @@ window.addEventListener("DOMContentLoaded", () => {
 // So with a limit of 5 terms it goes
 //   1,1 → 1,1,1 → 1,1,1,1 → 1,1,1,1,1 → 1,2
 // (1,1,1,1,2 / 1,1,1,2 / 1,1,2 are all non-standard, 1,2 is the first hit).
+//
+// The sequence the button left behind (already saved as the searched input) and
+// the number of clicks that got there are also kept, so after leaving the page
+// and coming back the button carries on from where it was instead of jumping
+// back to 1,1. Only a changed term limit starts the walk over.
 // ---------------------------------------------------------------------------
 
 //the highest sequence the button ever reaches
 const ORDINAL_WALK_CAP = [1, 3]
-//the term limit the last press used, so a change restarts the walk at 1,1
+
+//the (minimum-term) limit the walk last ran with, so a change restarts it at 1,1
 var ordinal_walk_max = null
+
+//How many times "+1" was pressed to reach the sequence that is saved: it counts
+//from 0 whenever the walk (re)starts at 1,1, is kept when you leave and come
+//back, and goes back to 0 when the maximum number of terms changes.
+var clicks = 0
+
+//where `clicks` and the sequence it belongs to are kept between visits
+const ORDINAL_WALK_SAVE_KEY = "lngi_ordinal_walk"
 
 //The +1 walk's own term limit. Values below 2 use a minimum of 2 terms,
 //since the walk starts at 1,1.
@@ -362,6 +378,34 @@ function ordinal_walk_limit() {
     const el = document.getElementById("ordinal_walk_max_terms")
     const n = el ? Number(el.value) : 2
     return isFinite(n) ? Math.max(2, Math.floor(n)) : 2
+}
+
+//show the counter next to the term limit (it is only a readout of `clicks`)
+function ordinal_walk_show_clicks() {
+    const el = document.getElementById("ordinal_walk_clicks")
+    if (el) el.textContent = `clicks: ${clicks}`
+}
+
+//keep `clicks` together with the sequence it counts to, so the pair survives a
+//reload (the sequence itself is already saved as lngi_searched_input)
+function ordinal_walk_save() {
+    const input = document.getElementById("search_input")
+    try {
+        localStorage.setItem(ORDINAL_WALK_SAVE_KEY, JSON.stringify({
+            input: String(input ? input.value : "").trim(),
+            clicks: clicks,
+            max: ordinal_walk_max
+        }))
+    } catch (e) {
+        console.log("could not save the +1 walk state", e)
+    }
+}
+
+//click on +1 for free: bump the count, show it and save it
+function ordinal_walk_add_click() {
+    clicks++
+    ordinal_walk_show_clicks()
+    ordinal_walk_save()
 }
 
 //true when a is at most b, in ω-Y order
@@ -442,20 +486,69 @@ function ordinal_walk_current() {
 
 function ordinal_plus_one() {
     const input = document.getElementById("search_input")
-    const limitInput = document.getElementById("ordinal_walk_max_terms")
-    const limitValue = limitInput ? limitInput.value : "2"
     const max = ordinal_walk_limit()
     //Avoid inspecting an old input when a changed limit already requires a reset.
-    const current = ordinal_walk_max === limitValue ? ordinal_walk_current() : null
+    let current = ordinal_walk_max === max ? ordinal_walk_current() : null
+    //a sequence with more terms than the walk allows can't be continued either
+    if (current && current.length > max) current = null
 
     //a changed term limit restarts the walk, and so does anything we can't continue from
     const next = current ? ordinal_walk_next(current, max) : [1, 1]
 
-    ordinal_walk_max = limitValue
+    ordinal_walk_max = max
     input.value = next.join(",")
     //same path as typing it: refreshes the result, the analysis part and the saved input
     search_time()
+    //one more click reached the sequence now saved
+    ordinal_walk_add_click()
 }
+
+//brought back after a reload: the saved sequence is continued instead of being
+//thrown away, and the saved click count comes with it
+function ordinal_walk_restore() {
+    const input = document.getElementById("search_input")
+    const saved_input = String(input ? input.value : "").trim()
+    const max = ordinal_walk_limit()
+
+    clicks = 0
+
+    var saved = null
+    try {
+        saved = JSON.parse(localStorage.getItem(ORDINAL_WALK_SAVE_KEY) || "null")
+    } catch (e) {
+        saved = null
+    }
+
+    //the count only belongs to this sequence seen under this term limit
+    if (saved && typeof saved.clicks == "number" && isFinite(saved.clicks) && saved.clicks >= 0 &&
+        String(saved.input ?? "").trim() === saved_input && saved.max === max) {
+        clicks = Math.floor(saved.clicks)
+    }
+
+    //wherever the walk can continue from the restored sequence, let it: pressing
+    //+1 then moves one step further instead of starting again at 1,1
+    const restored = ordinal_walk_current()
+    ordinal_walk_max = restored && restored.length <= max ? max : null
+
+    ordinal_walk_show_clicks()
+}
+
+//typing a sequence by hand drops the walk's progress: no click got there
+const searchInputEl = document.getElementById("search_input")
+if (searchInputEl) searchInputEl.addEventListener("input", () => {
+    clicks = 0
+    ordinal_walk_show_clicks()
+    ordinal_walk_save()
+})
+
+//a new maximum number of terms restarts the walk, so the count starts over
+const ordinalWalkLimitEl = document.getElementById("ordinal_walk_max_terms")
+if (ordinalWalkLimitEl) ordinalWalkLimitEl.addEventListener("input", () => {
+    if (ordinal_walk_limit() === ordinal_walk_max) return
+    clicks = 0
+    ordinal_walk_show_clicks()
+    ordinal_walk_save()
+})
 
 function go_2048() {
     document.getElementById('sex').value = '1,2,4,8,16,32,64,128,256,512,1024,2048'

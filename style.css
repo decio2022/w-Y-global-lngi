@@ -525,6 +525,13 @@ h2 {
     width: 5em;
 }
 
+#ordinal_walk_clicks {
+    color: #555;
+    font-size: 0.9em;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
 #ordinal_plus_one {
     flex: 0 0 auto;
     padding: 4px 12px;
