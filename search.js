@@ -352,6 +352,10 @@ window.addEventListener("DOMContentLoaded", () => {
 //   1,1 → 1,1,1 → 1,1,1,1 → 1,1,1,1,1 → 1,2
 // (1,1,1,1,2 / 1,1,1,2 / 1,1,2 are all non-standard, 1,2 is the first hit).
 //
+// The "Max" button does the same presses, but keeps pressing by itself until the
+// sequence has as many terms as the limit allows, so it lands on the next full
+// sequence: with 5 terms 1,1,1,1,1 → 1,2,1,1,1 → 1,2,1,2,1 → 1,2,1,2,2 → …
+//
 // The sequence the button left behind (already saved as the searched input) and
 // the number of clicks that got there are also kept, so after leaving the page
 // and coming back the button carries on from where it was instead of jumping
@@ -361,8 +365,12 @@ window.addEventListener("DOMContentLoaded", () => {
 //the highest sequence the button ever reaches
 const ORDINAL_WALK_CAP = [1, 3]
 
-//the (minimum-term) limit the walk last ran with, so a change restarts it at 1,1
+//the term limit the walk currently runs with, so a change restarts it at 1,1
 var ordinal_walk_max = null
+
+//set when the maximum terms changed: the next press then starts over at 1,1
+//instead of continuing the sequence that is already in the box
+var ordinal_walk_restart = false
 
 //How many times "+1" was pressed to reach the sequence that is saved: it counts
 //from 0 whenever the walk (re)starts at 1,1, is kept when you leave and come
@@ -394,16 +402,16 @@ function ordinal_walk_save() {
         localStorage.setItem(ORDINAL_WALK_SAVE_KEY, JSON.stringify({
             input: String(input ? input.value : "").trim(),
             clicks: clicks,
-            max: ordinal_walk_max
+            max: ordinal_walk_limit()
         }))
     } catch (e) {
         console.log("could not save the +1 walk state", e)
     }
 }
 
-//click on +1 for free: bump the count, show it and save it
-function ordinal_walk_add_click() {
-    clicks++
+//count `n` more clicks (Max counts every inner press), show it and save it
+function ordinal_walk_add_click(n = 1) {
+    clicks += n
     ordinal_walk_show_clicks()
     ordinal_walk_save()
 }
@@ -484,23 +492,50 @@ function ordinal_walk_current() {
     return ordinal_walk_standard(l) ? l : null
 }
 
-function ordinal_plus_one() {
+//One press of the walk, shared by "+1" and "Max".
+//With `maximize` the press keeps going by itself until the sequence fills the
+//term limit, walking up again after a step that drops terms (1,1,1,1,1 → 1,2).
+//Every step it takes counts as a click, so Max counts exactly like pressing +1
+//that many times.
+function ordinal_walk_press(maximize) {
     const input = document.getElementById("search_input")
     const max = ordinal_walk_limit()
-    //Avoid inspecting an old input when a changed limit already requires a reset.
-    let current = ordinal_walk_max === max ? ordinal_walk_current() : null
+    //Continue from the sequence that is in the box (restored, typed or walked),
+    //unless a changed term limit already asks for a fresh start.
+    let current = ordinal_walk_restart ? null : ordinal_walk_current()
     //a sequence with more terms than the walk allows can't be continued either
     if (current && current.length > max) current = null
 
     //a changed term limit restarts the walk, and so does anything we can't continue from
-    const next = current ? ordinal_walk_next(current, max) : [1, 1]
+    let next = current ? ordinal_walk_next(current, max) : [1, 1]
+    let pressed = 1
+
+    if (maximize) {
+        //a short sequence grows one term per press, so this settles quickly; the
+        //bound only guards against a step that restarts the walk at 1,1
+        const guard = 2 * max + 8
+        while (next.length < max && pressed < guard) {
+            next = ordinal_walk_next(next, max)
+            pressed++
+        }
+    }
 
     ordinal_walk_max = max
+    ordinal_walk_restart = false
     input.value = next.join(",")
     //same path as typing it: refreshes the result, the analysis part and the saved input
     search_time()
-    //one more click reached the sequence now saved
-    ordinal_walk_add_click()
+    ordinal_walk_add_click(pressed)
+}
+
+//the "+1" button: one step of the walk
+function ordinal_plus_one() {
+    ordinal_walk_press(false)
+}
+
+//the "Max" button: as many steps as it takes to fill the term limit
+function ordinal_max() {
+    ordinal_walk_press(true)
 }
 
 //brought back after a reload: the saved sequence is continued instead of being
@@ -525,27 +560,34 @@ function ordinal_walk_restore() {
         clicks = Math.floor(saved.clicks)
     }
 
-    //wherever the walk can continue from the restored sequence, let it: pressing
-    //+1 then moves one step further instead of starting again at 1,1
-    const restored = ordinal_walk_current()
-    ordinal_walk_max = restored && restored.length <= max ? max : null
+    //nothing forces a restart: pressing +1 or Max continues the restored
+    //sequence instead of starting over at 1,1
+    ordinal_walk_max = max
+    ordinal_walk_restart = false
 
     ordinal_walk_show_clicks()
 }
 
-//typing a sequence by hand drops the walk's progress: no click got there
+//typing a sequence by hand drops the walk's progress: no click got there. The
+//typed sequence is what the next press continues from.
 const searchInputEl = document.getElementById("search_input")
 if (searchInputEl) searchInputEl.addEventListener("input", () => {
     clicks = 0
+    ordinal_walk_max = ordinal_walk_limit()
+    ordinal_walk_restart = false
     ordinal_walk_show_clicks()
     ordinal_walk_save()
 })
 
-//a new maximum number of terms restarts the walk, so the count starts over
+//a new maximum number of terms restarts the walk at 1,1, so the count starts over
 const ordinalWalkLimitEl = document.getElementById("ordinal_walk_max_terms")
 if (ordinalWalkLimitEl) ordinalWalkLimitEl.addEventListener("input", () => {
-    if (ordinal_walk_limit() === ordinal_walk_max) return
+    const max = ordinal_walk_limit()
+    //typing something the walk can't use (1, or nothing) isn't a real change
+    ordinal_walk_restart = max !== ordinal_walk_max
+    if (!ordinal_walk_restart) return
     clicks = 0
+    ordinal_walk_max = max
     ordinal_walk_show_clicks()
     ordinal_walk_save()
 })

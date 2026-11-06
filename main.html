@@ -115,6 +115,8 @@
                     title="The analysis part shows this ordinal (1,1 when nothing valid is searched)">
                 <button type="button" id="ordinal_plus_one" onclick="ordinal_plus_one()"
                     title="Walk standard ω-Y sequences up to the maximum number of terms. After 1,3, start again at 1,1.">+1</button>
+                <button type="button" id="ordinal_max" onclick="ordinal_max()"
+                    title="Same as +1, but keeps walking until the sequence has as many terms as the maximum allows (so with 5 terms: 1,1,1,1,1 → 1,2,1,1,1 → 1,2,1,2,1).">Max</button>
             </div>
             <div class="ordinal-walk-settings">
                 <label for="ordinal_walk_max_terms">Maximum terms for +1:</label>

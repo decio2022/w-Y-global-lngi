@@ -532,7 +532,8 @@ h2 {
     white-space: nowrap;
 }
 
-#ordinal_plus_one {
+#ordinal_plus_one,
+#ordinal_max {
     flex: 0 0 auto;
     padding: 4px 12px;
     border: 1px solid #bbb;
@@ -543,11 +544,13 @@ h2 {
     font-weight: bold;
 }
 
-#ordinal_plus_one:hover {
+#ordinal_plus_one:hover,
+#ordinal_max:hover {
     background: #ffe680;
 }
 
-#ordinal_plus_one:active {
+#ordinal_plus_one:active,
+#ordinal_max:active {
     background: #ffd84d;
 }
 
