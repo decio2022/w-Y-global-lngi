@@ -130,7 +130,7 @@ btn_mountain.addEventListener("click", () => {
 function update_page() {
     if (document.getElementById("milestone_header")) document.getElementById("milestone_header").style.display = (page == 1 || page == 7) ? "flex" : "none"
     if (document.getElementById("scratch_bars")) document.getElementById("scratch_bars").hidden = (page != 1 && page != 7)
-    if (document.getElementById("search_progress_source_row")) document.getElementById("search_progress_source_row").hidden = (page != 7)
+    if (document.getElementById("search_progress_source_row")) document.getElementById("search_progress_source_row").hidden = (page != 1 && page != 7)
     if (document.getElementById("future-milestone")) {
         document.getElementById("future-milestone").hidden = (page != 2)
         document.getElementById("future-milestone").style.display = page == 2 ? "flex" : "none"

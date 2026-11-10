@@ -77,29 +77,61 @@ function scratch_bar_init() {
     }
 }
 
-var lt = 0
-function update_scratch_bars(x) {
-    for (var i = 0; i < 53; i++) {
-        if (i < super_list.length) {
-            var u = x + super_list[i][2] / (2 ** super_list[i][1] / 2)
-            if (i == 0) {
-                u = Math.ceil(x)
-            }
-            
-            var t = get_time_inv(u)
+// Both progress views share the searched sequence, never the running clock.
+// MaxTerms controls milestone depth; zero retains the original unlimited depth.
+function progress_term_limit() {
+    const n = Number(document.getElementById("MaxTerms").value)
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
+}
 
-            if (page == 1) {
-                document.getElementById(`bar_${i}`).style.visibility = "visible"
-                document.getElementById(`bar_${i}`).innerHTML =
-                    `${convert_From_wY(super_list[i][0] + (i == super_list.length - 1 ? ",1" : ""), scratch_bar_display)} <small>(${((1 - super_list[i][2]) * 100).toFixed(2)}%`
+function progress_model(value, maxTerms) {
+    const clamped = Math.max(2, Math.min(4, value))
+    if (clamped === 4) return { percent: 100, bars: [] }
 
-                document.getElementById(`bar_${i}`).style.backgroundColor = `hsl(${super_list[i][1] * 10},100%,90%)`
-                document.getElementById(`bar_${i}`).style.width = `${(1 - super_list[i][2]) * 100}%`
-            }
-        } else {
-            document.getElementById(`bar_${i}`).style.visibility = "hidden"
-        }
+    // Use the original LNGI decomposition and its local milestone percentages.
+    const decomposition = num_to_lngi(clamped, maxTerms)
+    const bars = super_list.map(([ordinal, depth, remaining], index) => ({
+        ordinal: ordinal + (index === super_list.length - 1 && !decomposition[3] ? ",1" : ""),
+        depth,
+        percent: Math.max(0, Math.min(100, (1 - remaining) * 100))
+    })).filter(bar => bar.ordinal !== "1,3" &&
+        (!maxTerms || bar.ordinal.split(",").length <= maxTerms))
+    return { percent: (clamped - 2) * 50, bars }
+}
+
+let progress_render_key = null
+function update_search_progress() {
+    const sequence = analysis_sequence()
+    const value = analysis_value()
+    const maxTerms = progress_term_limit()
+    const notationSettings = ["Y_Terms", "BMS_Terms", "compress_bms", "format_cOCF"].map(id => {
+        const el = document.getElementById(id)
+        return [el.value, el.checked]
+    })
+    const key = JSON.stringify([sequence, value, maxTerms, scratch_bar_display, page, notationSettings])
+    if (key === progress_render_key) return
+    progress_render_key = key
+
+    const model = progress_model(value, maxTerms)
+    const mainBar = document.getElementById("main_lngi_bar")
+    mainBar.style.width = `${model.percent}%`
+    mainBar.style.backgroundColor = `hsl(${model.percent},90%,70%)`
+    mainBar.textContent = `${model.percent.toFixed(3)}% to 1,3 (final milestone)`
+    mainBar.parentElement.setAttribute("aria-label", mainBar.textContent)
+    document.getElementById("main_lngi_Content").textContent = sequence
+    document.getElementById("search_progress_source").textContent =
+        `${sequence}${searched_ordinal ? "" : " (default: no valid search)"}; Max ω-Y Terms: ${maxTerms || "unlimited"}`
+
+    for (let i = 0; i < 53; i++) {
+        const el = document.getElementById(`bar_${i}`)
+        const bar = model.bars[i]
+        el.hidden = !bar
+        if (!bar) continue
+        el.innerHTML = `${safe_convert(bar.ordinal, scratch_bar_display)} <small>(${bar.percent.toFixed(2)}%)</small>`
+        el.style.backgroundColor = `hsl(${bar.depth * 10},100%,90%)`
+        el.style.width = `${bar.percent}%`
     }
+    document.title = `ω-Y LNGI: ${sequence} → 1,3`
 }
 
 scratch_bar_init()
@@ -107,12 +139,13 @@ scratch_bar_init()
 var super_list = []
 
 
-function ntl(m) {
+function ntl(m, maxTerms = 0) {
     super_list = []
     var ord = `1,${Math.max(1, Math.floor(m))}`
     if (m > 20) {
         return [ord,m,0]
 }
+    var truncated = false
     var steps = 0
     var m = 1 - (m % 1)
     while (ord.length < 100 && ord.split(",").at(-1) < 1e8 && steps < 53) {
@@ -128,7 +161,12 @@ function ntl(m) {
         }
         var base = Y_Sequence.fs(ord, exp).split(",")
         var ordl = ord.split(",").length
-        ord = base.slice(0, ordl + exp - 1).join(",")
+        const next = base.slice(0, ordl + exp - 1).join(",")
+        if (maxTerms && next.split(",").length > maxTerms) {
+            truncated = true
+            break
+        }
+        ord = next
         m = m - 1
         if (ord.split(",").at(-1) == 1) {
             ord = ord.split(",");
@@ -146,12 +184,12 @@ function ntl(m) {
         ord.pop();
         ord = ord.join(",");
     }
-    return [ord, m, exp]
+    return [ord, m, exp, truncated]
 }
 
-function num_to_lngi(m) {
+function num_to_lngi(m, maxTerms = 0) {
     var m = m - m % 1 + 0.5 + 0.5 * (m % 1)
-    return ntl(m)
+    return ntl(m, maxTerms)
 }
 
 //1,3,4,2,5,6 => 4.007999420166016
@@ -281,23 +319,6 @@ document.getElementById("analysis_add").onclick = () => {
 
 renderAnalysisPanels();
 
-function num_time(t,update_main_bar=true) {
-    var t_elapsed = Math.max(0, t - st)
-    if (t_elapsed == 0) {
-        return `Not started yet. Wait for the clock to hit.<br>Time left: <span style="font-size: 150%">${((st - t) / 1000).toFixed(3)}s</span>`
-    } else {
-        var u = get_time(t_elapsed)
-        var j = num_to_lngi(u)
-        if (update_main_bar) {
-
-            document.getElementById("main_lngi_bar").style.width = `${(1 - j[1]) * 100}%`
-            update_scratch_bars(search_time()[0])
-
-            document.getElementById("main_lngi_bar").style.backgroundColor = lt / j[1] < 1 ? `hsl(100,90%,70%)` : `hsl(${(1 - j[1]) * 100},90%,70%)`
-        }
-        return [`${((1 - j[1]) * 100).toFixed(3)}%`, formatSeconds(lt), get_time(search_time()[0])]
-    }
-}
 
 var tps = 0
 var last_tick = Date.now()
@@ -312,7 +333,7 @@ function update() {
     lastRealTime = now;
     virtualElapsed += deltaRealTime * timeSpeed;
     simulatedTime = st + virtualElapsed + timeOffset;
-    var u = num_time(simulatedTime);
+
 
     if (get_time(simulatedTime - st) > 4) {
         const q = document.getElementsByClassName("SHO")
@@ -321,15 +342,14 @@ function update() {
         }
     }
 
-    document.getElementById("main_lngi_Content").innerHTML = `<i>${u[2]}</i>`
-    document.getElementById("main_lngi_bar").innerHTML = `${u[0]} to next ordinal (${u[1]} left)`
     document.getElementById("tps").innerHTML = `${tps.toFixed(1)} tps`
     //if the browser restored a typed search after the page loaded, catch up with it
     const search_input_el = document.getElementById("search_input")
     if (search_input_el && typeof search_time == "function" && search_input_el.value != last_search_input) {
         search_time()
     }
-    if (page == 3 && sync_mountain.checked) { document.getElementById("input").value = trimStringList(u[2], MaxYTerms.valueAsNumber) }
+    update_search_progress()
+    if (page == 3 && sync_mountain.checked) { document.getElementById("input").value = trimStringList(num_to_lngi(get_time(Math.max(0, simulatedTime - st)))[0], MaxYTerms.valueAsNumber) }
     if (page == 2) {
         //the analysis part shows the sequence searched in the Search tab (1,1 if there's none)
         const analysis_seq = analysis_sequence();
@@ -348,9 +368,6 @@ function update() {
         })
     };
 
-    if (page == 7) {
-        update_scratch_bars(analysis_value(), simulatedTime, super_list, true);
-    }
 
 
     
@@ -368,9 +385,8 @@ function update() {
     document.getElementById("time").innerHTML =
         `Time elapsed: ${formatSeconds(modifiedElapsedSeconds)}${timeStatusText}
         <br><small>You spent ${formatSeconds(player_time)} on this tab (${(player_time / (trueElapsedSeconds) * 100).toFixed(5)}% of the actual runtime)</small>`;
-    if (document.getElementById("time_mode")) document.getElementById("time_mode").innerHTML = `${tt == 0 ? "Time remaining" : "Time reached"} (Press to change)`
 
-    document.title = `ω-Y LNGI: <${super_list.slice(0, 6).at(-1)[0]}`
+
 
     // update_milestones(mpage) removed
 

@@ -57,11 +57,9 @@
             <span>
                 Progress of the ordinal searched in the Analyzer tab:
                 <span id="search_progress_source"></span><br>
-                <small><i>Every bar is one term: it counts from its lowest value up to its highest one,
-                    in the steps shown, until the term before it can increase. The values follow the
-                    real path of the sequence, e.g. from 1,2 to 1,3 it goes 1,2 → 1,2,1,2,1,2… → 1,2,2
-                    → 1,2,2,2 → …, not just the milestone values. Terms that don't get updated before
-                    the next milestone have no bar.</i></small>
+                <small><i>The top bar always targets 1,3. Below it, the original LNGI milestone bars
+                    follow this searched sequence, including +1 and Max changes. Max ω-Y Terms in
+                    Settings limits their depth (0 means unlimited); it does not change the input.</i></small>
             </span>
         </div>
 
@@ -74,9 +72,7 @@
 
             <span>px</span>
 
-            <button id="time_mode" onclick="tt = (tt+1)%2">
-                Time Remaining
-            </button>
+
         </div>
 
         <div class="header-row">
@@ -210,7 +206,7 @@
         <div id="secondcontainer" style="display: flex">
             <label>Max Dimensions <input id="MAXDIMENSIONS" type="number" min=0 value=10 step=1
                     oninput="renderer.requestDraw(true)"></label>
-            <label>Max &omega;-Y Terms <input id="MaxTerms" type="number" min=0 value=0 step=1></label>
+            <label>Max &omega;-Y Terms <input id="MaxTerms" type="number" min=0 value=0 step=1 title="Maximum sequence length for progress milestones and the synced visualizer. 0 means unlimited."></label>
         </div>
 
         <div id="secondcontainer" style="display: flex">
