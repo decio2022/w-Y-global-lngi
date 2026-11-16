@@ -349,7 +349,8 @@ window.addEventListener("DOMContentLoaded", () => {
 // 1,3 is the ceiling: the press after 1,3 wraps back to 1,1.
 //
 // For example, with base 3 and 10 terms:
-//   1,1 → 1,1,1 → 1,1,1,1 → 1,2 → 1,2,1 → … → 1,2,1,1,1,1 → 1,2,1,2 → …
+//   1,1 → 1,1,1 → 1,2 → 1,2,1 → 1,2,1,1 → 1,2,1,1,1 → 1,2,1,2 → …
+//   → 1,2,1,2,1,2,1,1,1 (ω3+3) → 1,2,2 (ω^2) → …
 // And with base 10 and 5 terms:
 //   1,1 → 1,1,1 → 1,1,1,1 → 1,1,1,1,1 → 1,2 → … → 1,2,1,1,1 → 1,2,1,2 → …
 //
@@ -470,10 +471,31 @@ function ordinal_walk_standard(l) {
     }
 }
 
-//Descend from the 1,3 ceiling via Y_Sequence.fs and return `currentordinal`
-//as soon as a fundamental-sequence step reaches `base`.
-//Uses the exact property that Y_Sequence.fs(s, 0) decrements a >1 last term
-//or pops a trailing 1, so consecutive step=0 moves collapse cleanly in O(1).
+//Canonical fundamental-sequence term of a ω-Y sequence for base maximization.
+//Y_Sequence.fs leaves the decremented trailing "1" on limit sequences whose
+//last term is 2 (e.g. fs("1,2", 2) = "1,1,1,1" = 4 instead of 3, and
+//fs("1,2,2", 2) = "1,2,1,2,1,2,1" = ω3+1 instead of ω3). Popping that
+//trailing "1" gives the canonical FS terms:
+//  ω[0..3] = 1, 2, 3, 4   and   ω^2[0..3] = ω, ω2, ω3, ω4.
+function ordinal_walk_fs(seq, n) {
+    const raw = Y_Sequence.fs(seq, n)
+    if (!Y_Sequence.isSuccessor(seq)) {
+        const parts = raw.split(",")
+        if (parts.length > 1 && parts[parts.length - 1] === "1") {
+            return parts.slice(0, -1).join(",")
+        }
+    }
+    return raw
+}
+
+//Descend from the 1,3 ceiling via canonical ω-Y fundamental sequences and
+//return `currentordinal` once `ord` reaches its `base`-th FS term
+//(`ord >= ordinal_walk_fs(currentordinal, base)`).
+//For example, at base 3:
+//  ω[3] = 4 (1,1,1,1) → 1,1,1 (3) stays 3; 1,1,1,1 (4) maximizes to ω (1,2).
+//  ω^2[3] = ω4 (1,2,1,2,1,2,1,2) → ω3+1, ω3+2, ω3+3 descend cleanly into ω4;
+//  ω3+4 maximizes to ω4 and then to ω^2 (1,2,2).
+//Consecutive step=0 moves collapse cleanly in O(1).
 function maximizeordinal_base(ord, base) {
     if (base <= 0) return ORDINAL_WALK_CAP_STR
     if (Y_Sequence.cmp(ord, ORDINAL_WALK_CAP_STR) >= 0) return ORDINAL_WALK_CAP_STR
@@ -488,12 +510,14 @@ function maximizeordinal_base(ord, base) {
         const L = curArr.length
         const v = curArr[L - 1]
 
-        //step = 0 is always < base (since base >= 1): fast-skip consecutive step=0 moves
+        //successor (v <= 1): predecessor is curArr[0..L-2]
         if (v <= 1) {
             currentordinal = curArr.slice(0, -1).join(",")
             continue
         }
 
+        //fast-skip consecutive n=0 steps where ordinal_walk_fs(currentordinal, 0) >= ord
+        //(for v === 2, fs(cur, 0) = cur[0..L-2]; for v >= 3, fs(cur, 0) = [...cur[0..L-2], v-1])
         let prefixCmp = 0
         const minPre = Math.min(ordArr.length, L - 1)
         for (let i = 0; i < minPre; i++) {
@@ -511,30 +535,41 @@ function maximizeordinal_base(ord, base) {
                 currentordinal = curArr.slice(0, -1).join(",")
                 continue
             }
-            if (ordArr.length === L && ordArr[L - 1] < v) {
-                currentordinal = ord
-                continue
-            }
-            if (ordArr.length > L && ordArr[L - 1] < v - 1) {
-                curArr[L - 1] = ordArr[L - 1] + 1
-                currentordinal = curArr.join(",")
-                continue
+            if (v >= 3) {
+                if (ordArr.length === L && ordArr[L - 1] < v) {
+                    if (ordArr[L - 1] === 1) {
+                        //fs([pre, 2], 0) = [pre] < [pre, 1], so stop at [pre, 2] to test n=1..base
+                        curArr[L - 1] = 2
+                        currentordinal = curArr.join(",")
+                        continue
+                    }
+                    currentordinal = ord
+                    continue
+                }
+                if (ordArr.length > L && ordArr[L - 1] < v - 1) {
+                    curArr[L - 1] = Math.max(2, ordArr[L - 1] + 1)
+                    currentordinal = curArr.join(",")
+                    continue
+                }
             }
         }
 
-        //fs(currentordinal, 0) < ord, so find the smallest 1 <= n < base with fs >= ord
-        let step = base
+        //ordinal_walk_fs(currentordinal, 0) < ord: search n = 1..base for first fs >= ord.
+        //If ord >= ordinal_walk_fs(currentordinal, base), maximize straight to currentordinal.
         let nextOrd = null
-        for (let n = 1; n < base; n++) {
-            const x = Y_Sequence.fs(currentordinal, n)
-            if (Y_Sequence.cmp(x, ord) >= 0) {
-                step = n
+        for (let n = 1; n <= base; n++) {
+            const x = ordinal_walk_fs(currentordinal, n)
+            const c = Y_Sequence.cmp(x, ord)
+            if (c >= 0) {
+                if (n === base && c === 0) {
+                    return currentordinal
+                }
                 nextOrd = x
                 break
             }
         }
 
-        if (step >= base) {
+        if (nextOrd === null) {
             return currentordinal
         }
 

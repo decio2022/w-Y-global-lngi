@@ -90,28 +90,55 @@ test('+1 refreshes the same searched progress on both progress pages', () => {
 
 test('+1 takes successor and auto-maximizes on base limit or terms limit', () => {
     // Base limit reached before terms limit: base=3, max=10
+    // Must reach ω+3, ω2+3, and ω3+3 (1,2,1,2,1,2,1,1,1) before maximizing to ω^2 (1,2,2)
     element('ordinal_walk_max_terms').value = '10';
     element('ordinal_walk_base').value = '3';
     search('1,1');
     const seenBase3 = [];
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 14; i++) {
         run('ordinal_plus_one()');
         seenBase3.push(element('search_input').value);
     }
     assert.deepEqual(seenBase3, [
-        '1,1,1', '1,1,1,1', '1,2',
-        '1,2,1', '1,2,1,1', '1,2,1,1,1', '1,2,1,1,1,1', '1,2,1,2',
-        '1,2,1,2,1', '1,2,1,2,1,1', '1,2,1,2,1,1,1', '1,2,1,2,1,1,1,1', '1,2,1,2,1,2',
-        '1,2,1,2,1,2,1', '1,2,2',
+        '1,1,1', '1,2',
+        '1,2,1', '1,2,1,1', '1,2,1,1,1', '1,2,1,2',
+        '1,2,1,2,1', '1,2,1,2,1,1', '1,2,1,2,1,1,1', '1,2,1,2,1,2',
+        '1,2,1,2,1,2,1', '1,2,1,2,1,2,1,1', '1,2,1,2,1,2,1,1,1', '1,2,2',
     ]);
 
-    // Base=2 walks cleanly to 1,3 and wraps back to 1,1
+    // With enough terms (max=20), base=3 visits every a*ω^2 + b*ω + c (0 <= a,b,c <= 3)
+    // reaching ω^2*3 + ω3 + 3 before maximizing to ω^3 (1,2,2,2) in 4^3 - 2 = 62 clicks
+    element('ordinal_walk_max_terms').value = '20';
+    element('ordinal_walk_base').value = '3';
+    search('1,1');
+    let prevBase3 = '1,1';
+    for (let i = 0; i < 62; i++) {
+        run('ordinal_plus_one()');
+        if (i === 60) assert.equal(element('search_input').value, '1,2,2,1,2,2,1,2,2,1,2,1,2,1,2,1,1,1');
+        prevBase3 = element('search_input').value;
+    }
+    assert.equal(prevBase3, '1,2,2,2');
+
+    // Base=2 with max=10: 2 -> ω -> ω+1 -> ω+2 -> ω2 -> ω2+1 -> ω2+2 -> ω^2
+    element('ordinal_walk_max_terms').value = '10';
+    element('ordinal_walk_base').value = '2';
+    search('1,1');
+    const seenBase2 = [];
+    for (let i = 0; i < 7; i++) {
+        run('ordinal_plus_one()');
+        seenBase2.push(element('search_input').value);
+    }
+    assert.deepEqual(seenBase2, [
+        '1,2', '1,2,1', '1,2,1,1', '1,2,1,2', '1,2,1,2,1', '1,2,1,2,1,1', '1,2,2',
+    ]);
+
+    // Base=2 with max=5 walks cleanly to 1,3 and wraps back to 1,1
     element('ordinal_walk_max_terms').value = '5';
     element('ordinal_walk_base').value = '2';
     search('1,1');
     let steps = 0;
     let prev = '1,1';
-    while (prev !== '1,3' && steps < 100) {
+    while (prev !== '1,3' && steps < 200) {
         run('ordinal_plus_one()');
         const cur = element('search_input').value;
         assert.equal(run(`Y_Sequence.cmp('${cur}', '${prev}') > 0`), true);
@@ -121,7 +148,7 @@ test('+1 takes successor and auto-maximizes on base limit or terms limit', () =>
         steps++;
     }
     assert.equal(prev, '1,3');
-    assert.equal(steps, 27);
+    assert.equal(steps, 78);
     run('ordinal_plus_one()');
     assert.equal(element('search_input').value, '1,1');
 
@@ -141,10 +168,13 @@ test('+1 takes successor and auto-maximizes on base limit or terms limit', () =>
 });
 
 test('maximizeordinal handles direct calls, base changes reset clicks, and UI has Base without Max', () => {
-    assert.equal(run(`maximizeordinal('1,1,1,1,1', 3, 10)`), '1,2');
+    assert.equal(run(`maximizeordinal('1,1,1', 3, 10)`), '1,1,1');
+    assert.equal(run(`maximizeordinal('1,1,1,1', 3, 10)`), '1,2');
+    assert.equal(run(`maximizeordinal('1,2,1,2,1,2,1,1,1', 3, 10)`), '1,2,1,2,1,2,1,1,1');
+    assert.equal(run(`maximizeordinal('1,2,1,2,1,2,1,1,1,1', 3, 10)`), '1,2,2');
     assert.equal(run(`maximizeordinal('1,2,4,8,16', 3, 10)`), '1,3');
     assert.equal(run(`maximizeordinal('1,2,1,1,1,1', 10, 5)`), '1,2,1,2');
-    assert.equal(run(`maximizeordinal('1,2,2,2,1', 2, 5)`), '1,2,3');
+    assert.equal(run(`maximizeordinal('1,2,2,2,2', 2, 10)`), '1,2,3');
 
     // Changing base resets clicks and restarts the walk at 1,1 on next +1
     element('ordinal_walk_max_terms').value = '10';
