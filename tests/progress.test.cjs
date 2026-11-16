@@ -69,7 +69,7 @@ test('+1 and Max refresh the same searched progress on both progress pages', () 
     element('MaxTerms').value = '2';
     run('update_search_progress()');
     assert.match(element('search_progress_source').textContent, /Max ω-Y Terms: 2/);
-    for (let i = 0; i < 53; i++) {
+    for (let i = 0; i < 250; i++) {
         if (!element(`bar_${i}`).hidden) assert.ok(!element(`bar_${i}`).innerHTML.includes('1,1,1'));
     }
 });
@@ -80,5 +80,5 @@ test('invalid input falls back safely and later milestones cannot overfill the c
     assert.equal(element('main_lngi_Content').textContent, '1,1');
     search('1,4');
     assert.equal(element('main_lngi_bar').style.width, '100%');
-    assert.ok(Array.from({ length: 53 }, (_, i) => element(`bar_${i}`).hidden).every(Boolean));
+    assert.ok(Array.from({ length: 250 }, (_, i) => element(`bar_${i}`).hidden).every(Boolean));
 });
