@@ -116,7 +116,8 @@ const btn_compare = document.getElementById("btn_compare");
 if (btn_compare) {
     btn_compare.addEventListener("click", () => {
         page = 8;
-        update_page()
+        update_page();
+        if (typeof ordinal_compare_update_previews === "function") ordinal_compare_update_previews();
     });
 }
 
@@ -205,8 +206,10 @@ function saveAllSettings() {
         ordinal_walk_base: Number(document.getElementById("ordinal_walk_base").value),
 
         // Compare Mode Settings
+        compare_mode: typeof ordinal_compare_mode === "string" ? ordinal_compare_mode : "count",
         compare_start: document.getElementById("compare_start") ? document.getElementById("compare_start").value : "1,1",
         compare_target: document.getElementById("compare_target") ? document.getElementById("compare_target").value : "1,2,2",
+        compare_steps: document.getElementById("compare_steps") ? document.getElementById("compare_steps").value : "100",
         compare_max_terms: document.getElementById("compare_max_terms") && Number(document.getElementById("compare_max_terms").value) >= 2
             ? Math.floor(Number(document.getElementById("compare_max_terms").value)) : 10,
         compare_base: document.getElementById("compare_base") && Number(document.getElementById("compare_base").value) >= 2
@@ -279,8 +282,15 @@ function loadAllSettings() {
         setVal("ordinal_walk_base", settings.ordinal_walk_base);
         setVal("compare_start", settings.compare_start);
         setVal("compare_target", settings.compare_target);
+        setVal("compare_steps", settings.compare_steps);
         setVal("compare_max_terms", settings.compare_max_terms);
         setVal("compare_base", settings.compare_base);
+        if (typeof ordinal_compare_set_mode === "function" && (settings.compare_mode === "count" || settings.compare_mode === "advance")) {
+            ordinal_compare_set_mode(settings.compare_mode, false);
+        }
+        if (typeof ordinal_compare_update_previews === "function") {
+            ordinal_compare_update_previews();
+        }
         setVal("Scratch_bar_height", settings.Scratch_bar_height);
         setVal("ROWHEIGHT", settings.ROWHEIGHT);
         setVal("COLUMNWIDTH", settings.COLUMNWIDTH);
@@ -310,7 +320,7 @@ function attachAutoSaveListeners() {
     const selectorIds = [
         "font_family", "font_size", "compress_bms", "format_cOCF",
         "Y_Terms", "BMS_Terms", "ordinal_walk_max_terms", "ordinal_walk_base",
-        "compare_start", "compare_target", "compare_max_terms", "compare_base",
+        "compare_start", "compare_target", "compare_steps", "compare_max_terms", "compare_base",
         "Scratch_bar_height",
         "ROWHEIGHT", "COLUMNWIDTH", "LINETHICKNESS", "NUMBERSIZE", "NUMBERTHICKNESS",
         "MAXDIMENSIONS", "MaxTerms", "STACKMODE", "HIGHLIGHT", "EXTRADIVIDER", "_UPDATEMODE"

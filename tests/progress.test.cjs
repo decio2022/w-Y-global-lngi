@@ -8,16 +8,27 @@ const root = path.join(__dirname, '..');
 const elements = new Map();
 const listeners = new Map();
 function element(id) {
-    if (!elements.has(id)) elements.set(id, {
-        value: '0', style: {}, hidden: false, textContent: '', innerHTML: '',
-        parentElement: { setAttribute() {} },
-        addEventListener(type, fn) {
-            const key = `${id}:${type}`;
-            if (!listeners.has(key)) listeners.set(key, []);
-            listeners.get(key).push(fn);
-        },
-        appendChild() {},
-    });
+    if (!elements.has(id)) {
+        const classes = new Set();
+        elements.set(id, {
+            value: '0', style: {}, hidden: false, textContent: '', innerHTML: '',
+            classList: {
+                add: c => classes.add(c),
+                remove: c => classes.delete(c),
+                toggle: (c, force) => force === undefined
+                    ? (classes.has(c) ? (classes.delete(c), false) : (classes.add(c), true))
+                    : (force ? (classes.add(c), true) : (classes.delete(c), false)),
+                contains: c => classes.has(c),
+            },
+            parentElement: { setAttribute() {} },
+            addEventListener(type, fn) {
+                const key = `${id}:${type}`;
+                if (!listeners.has(key)) listeners.set(key, []);
+                listeners.get(key).push(fn);
+            },
+            appendChild() {},
+        });
+    }
     return elements.get(id);
 }
 function trigger(id, type, event) {
@@ -454,20 +465,205 @@ test('comparison mode UI renders step count & status, supports cancel, and wires
     assert.equal(uiEl('future-milestone').hidden, true);
     assert.equal(uiEl('future-milestone').style.display, 'none');
 
-    // Settings round-trip for compare inputs
+    // Settings round-trip for compare inputs (including compare_mode & compare_steps)
     uiEl('compare_start').value = '1,2';
     uiEl('compare_target').value = '1,2,4';
+    uiEl('compare_steps').value = '2500';
     uiEl('compare_max_terms').value = '12';
     uiEl('compare_base').value = '4';
+    uiCtx.ordinal_compare_mode = 'advance';
+    let restoredMode = null;
+    uiCtx.ordinal_compare_set_mode = m => { restoredMode = m; };
     vm.runInContext('saveAllSettings()', uiCtx);
     uiEl('compare_start').value = '';
     uiEl('compare_target').value = '';
+    uiEl('compare_steps').value = '';
     uiEl('compare_max_terms').value = '';
     uiEl('compare_base').value = '';
     vm.runInContext('loadAllSettings()', uiCtx);
     assert.equal(uiEl('compare_start').value, '1,2');
     assert.equal(uiEl('compare_target').value, '1,2,4');
+    assert.equal(uiEl('compare_steps').value, '2500');
     assert.equal(String(uiEl('compare_max_terms').value), '12');
     assert.equal(String(uiEl('compare_base').value), '4');
+    assert.equal(restoredMode, 'advance');
 });
+
+test('step-forward (+N steps) lookup, fast batch FS, notation, progress %, and helpers', () => {
+    // Fast pure-array 1D FS batch matches ordinal_walk_fs exactly on normal, skipped-tower, and 1,3 cases
+    for (const seq of ['1,2', '1,2,2', '1,2,3', '1,2,4', '1,2,4,4', '1,2,4,6', '1,2,4,5,7,7', '1,2,4,8,8', '1,3']) {
+        const batch = run(`ordinal_walk_fs_batch_arr([${seq}], 4, Infinity)`);
+        assert.ok(Array.isArray(batch) && batch.length === 4, `batch failed for ${seq}`);
+        for (let k = 1; k <= 4; k++) {
+            const expected = run(`ordinal_walk_fs(${JSON.stringify(seq)}, ${k})`);
+            assert.equal(batch[k - 1].join(','), expected, `FS mismatch for ${seq}[${k}]`);
+        }
+    }
+
+    // Exact step-forward agreement with brute force on full (5, 3) walk from multiple starts
+    const walk53 = run(`(() => {
+        const out = ['1,1'];
+        let cur = [1, 1];
+        while (cur.join(',') !== '1,3') {
+            cur = ordinal_walk_next(cur, 5, 3);
+            out.push(cur.join(','));
+        }
+        return out;
+    })()`);
+    for (const startIdx of [0, 5, 19]) {
+        for (const delta of [0, 1, 2, 7, 18, walk53.length - 1 - startIdx]) {
+            const res = run(`ordinal_walk_advance_steps(${JSON.stringify(walk53[startIdx])}, ${delta}n, 5, 3)`);
+            assert.equal(res.status, 'ok');
+            assert.equal(res.result, walk53[startIdx + delta]);
+        }
+    }
+
+    // Early-pruned step-forward stays fast even at huge maxTerms (25, 30) and matches brute force
+    for (const [start, n, m, b] of [
+        ['1,1', 50, 30, 3],
+        ['1,1', 500, 25, 3],
+        ['1,2,4', 200, 25, 3],
+    ]) {
+        const expected = run(`(() => {
+            let cur = [${start}];
+            for (let i = 0; i < ${n}; i++) cur = ordinal_walk_next(cur, ${m}, ${b});
+            return cur.join(',');
+        })()`);
+        const adv = run(`ordinal_walk_advance_steps(${JSON.stringify(start)}, ${n}n, ${m}, ${b})`);
+        assert.equal(adv.status, 'ok');
+        assert.equal(adv.result, expected);
+    }
+
+    // Large step-forward round-trips cleanly back through count_steps
+    const adv150k = run(`ordinal_walk_advance_steps('1,1', '150,000', 10, 3)`);
+    assert.equal(adv150k.status, 'ok');
+    assert.equal(adv150k.result, '1,2,4,7,10,8,10,8,5,7');
+    const back150k = run(`ordinal_walk_count_steps('1,1', ${JSON.stringify(adv150k.result)}, 10, 3)`);
+    assert.equal(back150k.status, 'ok');
+    assert.equal(back150k.steps, 150000n);
+
+    // Chunked advancer matches synchronous advancer
+    const chunkedAdv = run(`(() => {
+        const a = ordinal_walk_create_advancer('1,2,4', 2971n, 10, 3);
+        let ticks = 0, t;
+        do { t = a.step(20); ticks++; } while (!t.done);
+        return { ticks, status: t.result.status, result: t.result.result };
+    })()`);
+    assert.equal(chunkedAdv.status, 'ok');
+    assert.equal(chunkedAdv.result, '1,2,4,4');
+    assert.ok(chunkedAdv.ticks > 1);
+
+    // Cap boundary, non-fixed start, and invalid steps
+    const hitCap = run(`ordinal_walk_advance_steps('1,1', 21n, 5, 2)`);
+    assert.equal(hitCap.status, 'ok');
+    assert.equal(hitCap.result, '1,3');
+
+    const pastCap = run(`ordinal_walk_advance_steps('1,1', 22n, 5, 2)`);
+    assert.equal(pastCap.status, 'exceeds_cap');
+    assert.equal(pastCap.stepsToCap, 21n);
+
+    const atCap = run(`ordinal_walk_advance_steps('1,3', 1n, 10, 3)`);
+    assert.equal(atCap.status, 'exceeds_cap');
+    assert.equal(atCap.stepsToCap, 0n);
+
+    const nonFixedStart = run(`ordinal_walk_advance_steps('1,1,1,1', 1n, 10, 3)`);
+    assert.equal(nonFixedStart.status, 'ok');
+    assert.equal(nonFixedStart.result, '1,2');
+
+    assert.equal(run(`ordinal_walk_advance_steps('1,1', '', 10, 3)`).status, 'invalid_steps');
+    assert.equal(run(`ordinal_walk_advance_steps('1,1', '-3', 10, 3)`).status, 'invalid_steps');
+    assert.equal(run(`ordinal_walk_advance_steps('1,1', '1.5', 10, 3)`).status, 'invalid_steps');
+
+    // Pure LNGI progress % has zero side effects on Analyzer's #search_result
+    element('search_result').innerHTML = 'sentinel';
+    assert.equal(run(`ordinal_walk_lngi_percent('1,1')`), 0);
+    assert.equal(run(`ordinal_walk_lngi_percent('1,2')`), 50);
+    assert.equal(run(`ordinal_walk_lngi_percent('1,2,2')`), 56.25);
+    assert.equal(run(`ordinal_walk_lngi_percent('1,2,4')`), 75);
+    assert.equal(run(`ordinal_walk_lngi_percent('1,3')`), 100);
+    assert.equal(element('search_result').innerHTML, 'sentinel');
+
+    // Exact BigInt ratio percentage formatter
+    assert.equal(run(`ordinal_compare_format_ratio_pct(0n, 100n)`), '0%');
+    assert.equal(run(`ordinal_compare_format_ratio_pct(100n, 100n)`), '100%');
+    assert.equal(run(`ordinal_compare_format_ratio_pct(1n, 10000000n)`), '< 0.0001%');
+    assert.equal(run(`ordinal_compare_format_ratio_pct(150000n, 300702n)`), '49.88%');
+
+    // Notation HTML works cleanly in a browser-like context with EcOCF / BMS globals
+    const browCtx = vm.createContext({
+        console: { log() {}, warn() {}, error() {} }, Date, Math, Number, setTimeout, clearTimeout,
+        format_cOCF: { checked: true }, compress_BMS: { checked: false },
+        Y_Terms: { valueAsNumber: 17 }, BMS_Terms: { valueAsNumber: 17 },
+        document: { getElementById: () => ({ value: '', style: {}, hidden: false, addEventListener() {} }), querySelectorAll: () => [] },
+        localStorage: { getItem: () => null, setItem() {} },
+    });
+    browCtx.window = browCtx;
+    browCtx.addEventListener = () => {};
+    vm.runInContext(fs.readFileSync(path.join(root, 'conv.js'), 'utf8'), browCtx);
+    vm.runInContext(fs.readFileSync(path.join(root, 'search.js'), 'utf8'), browCtx);
+    assert.match(vm.runInContext(`ordinal_compare_notation_html('1,2,2')`, browCtx), /ω.*<sup>2<\/sup>/);
+    assert.match(vm.runInContext(`ordinal_compare_notation_html('1,2,4')`, browCtx), /ε<sub>0<\/sub>/);
+    assert.equal(vm.runInContext(`ordinal_compare_notation_html('1,2,4,8,16')`, browCtx), '(0,0,0,0)(1,1,1,1)');
+    assert.match(vm.runInContext(`ordinal_compare_notation_html('1,3')`, browCtx), /Lim\(BMS\)/);
+
+    // UI mode switching, Step Forward rendering, helpers (Swap, Use Analyzer, Sync Analyzer, Open in Analyzer), & previews
+    run(`ordinal_compare_set_mode('advance')`);
+    assert.equal(element('compare_target_group').hidden, true);
+    assert.equal(element('compare_steps_group').hidden, false);
+    assert.equal(element('compare_mode_advance').classList.contains('active'), true);
+    assert.equal(element('compare_mode_count').classList.contains('active'), false);
+
+    element('compare_start').value = '1,1';
+    element('compare_steps').value = '14';
+    element('compare_max_terms').value = '10';
+    element('compare_base').value = '3';
+    run('ordinal_compare_run()');
+    assert.match(element('compare_result').innerHTML, /1,2,2/);
+    assert.match(element('compare_result').innerHTML, /After \+14 steps/);
+    assert.match(element('compare_result').innerHTML, /Open 1,2,2 in Analyzer/);
+
+    // Exceeds cap in Step Forward UI
+    element('compare_start').value = '1,1';
+    element('compare_steps').value = '25';
+    element('compare_max_terms').value = '5';
+    element('compare_base').value = '2';
+    run('ordinal_compare_run()');
+    assert.match(element('compare_result').innerHTML, /walk limit reached/);
+    assert.match(element('compare_result').innerHTML, /after 21 steps/);
+
+    // Switch back to count mode and test helpers
+    run(`ordinal_compare_set_mode('count')`);
+    assert.equal(element('compare_target_group').hidden, false);
+    assert.equal(element('compare_steps_group').hidden, true);
+
+    element('compare_start').value = '1,2';
+    element('compare_target').value = '1,2,4';
+    run('ordinal_compare_swap()');
+    assert.equal(element('compare_start').value, '1,2,4');
+    assert.equal(element('compare_target').value, '1,2');
+
+    // Live previews reflect valid and invalid inputs
+    assert.match(element('compare_start_preview').innerHTML, /75\.00% to 1,3/);
+    element('compare_target').value = '1,4';
+    trigger('compare_target', 'input');
+    assert.match(element('compare_target_preview').innerHTML, /Exceeds walk limit 1,3/);
+
+    // Use Analyzer, Sync Analyzer, and Open in Analyzer
+    search('1,2,3');
+    element('ordinal_walk_max_terms').value = '14';
+    element('ordinal_walk_base').value = '5';
+    run(`ordinal_compare_use_analyzer('start')`);
+    assert.equal(element('compare_start').value, '1,2,3');
+    run(`ordinal_compare_sync_analyzer()`);
+    assert.equal(element('compare_max_terms').value, '14');
+    assert.equal(element('compare_base').value, '5');
+
+    run(`ordinal_compare_open_in_analyzer('1,2,4')`);
+    assert.equal(element('search_input').value, '1,2,4');
+    assert.equal(run('ordinal_walk_restart'), false);
+
+    // Ensure no background timers remain open at test end
+    run('ordinal_compare_cancel(false)');
+});
+
 

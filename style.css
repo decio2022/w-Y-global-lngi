@@ -569,8 +569,48 @@ h2 {
     gap: 10px;
 }
 
+.compare-mode-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.compare-mode-tab {
+    flex: 1 1 200px;
+    padding: 5px 12px;
+    border: 1px solid #9ad0ec;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.65);
+    color: #333;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.compare-mode-tab:hover {
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.compare-mode-tab.active {
+    background: #d8f3ff;
+    border-color: #4aa3d0;
+    color: #0b4a6f;
+    font-weight: bold;
+}
+
+.compare-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+}
+
+.compare-field-group[hidden] {
+    display: none;
+}
+
 .compare-input-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
     width: 100%;
@@ -582,8 +622,41 @@ h2 {
 }
 
 .compare-input-row input[type="text"] {
-    flex: 1 1 auto;
+    flex: 1 1 180px;
     min-width: 0;
+}
+
+.compare-preview {
+    margin-left: 128px;
+    font-size: 0.88em;
+    color: #334;
+    min-height: 1.2em;
+    overflow-wrap: anywhere;
+}
+
+.compare-preview-invalid {
+    color: #8a2c32;
+}
+
+.compare-helper-btn {
+    flex: 0 0 auto;
+    padding: 3px 9px;
+    border: 1px solid #b5cad6;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.85);
+    color: #234;
+    cursor: pointer;
+    font-size: 0.9em;
+    white-space: nowrap;
+}
+
+.compare-helper-btn:hover {
+    background: #e9f6fc;
+    border-color: #6ab0d6;
+}
+
+.compare-helper-btn:active {
+    background: #d6eef9;
 }
 
 .compare-settings {
@@ -634,16 +707,25 @@ h2 {
 
 .compare-result {
     padding: 10px 12px;
-    background: rgba(255, 255, 255, 0.75);
+    background: rgba(255, 255, 255, 0.82);
     border: 1px solid #9ad0ec;
     border-radius: 6px;
     line-height: 1.5;
+}
+
+.compare-result-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
 }
 
 .compare-result-steps {
     font-size: 1.25em;
     font-weight: bold;
     font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
 }
 
 .compare-result-meta {
@@ -651,13 +733,106 @@ h2 {
     font-size: 0.92em;
 }
 
+.compare-result-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: rgba(235, 247, 253, 0.65);
+    border: 1px solid #cce6f4;
+    border-radius: 5px;
+    font-size: 0.93em;
+}
+
+.compare-result-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.compare-result-row-label {
+    font-weight: bold;
+    color: #234;
+    min-width: 68px;
+}
+
+.compare-result-seq {
+    font-family: monospace;
+    background: rgba(255, 255, 255, 0.85);
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid #d5e6ef;
+    overflow-wrap: anywhere;
+}
+
+.compare-result-notation {
+    color: #222;
+}
+
+.compare-result-pct {
+    color: #4a6375;
+    font-size: 0.9em;
+    font-variant-numeric: tabular-nums;
+}
+
+.compare-progress-wrap {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.compare-progress-track {
+    position: relative;
+    width: 100%;
+    height: 10px;
+    background: #e3eef4;
+    border-radius: 5px;
+    overflow: hidden;
+    border: 1px solid #c6dfec;
+}
+
+.compare-progress-base {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    background: #b7d7e8;
+}
+
+.compare-progress-span {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: #3b9ad9;
+}
+
+.compare-progress-labels {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 6px;
+    font-size: 0.88em;
+    color: #345;
+    font-variant-numeric: tabular-nums;
+}
+
+.compare-result-actions {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
 .compare-result-note {
     color: #856404;
     background: #fff3cd;
     border: 1px solid #ffeeba;
     border-radius: 4px;
-    padding: 4px 8px;
-    margin-top: 6px;
+    padding: 5px 8px;
+    margin-top: 8px;
     font-size: 0.92em;
 }
 

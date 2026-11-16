@@ -182,15 +182,44 @@
 
     <div id="compare-mode" hidden>
         <div class="fmilestone-box2 compare-box">
-            <div class="compare-input-row">
-                <label for="compare_start">Start sequence:</label>
-                <input type="text" id="compare_start" value="1,1" placeholder="e.g. 1,1"
-                    title="Starting ω-Y sequence (standard sequence at or below 1,3)">
+            <div class="compare-mode-tabs" role="tablist" aria-label="Comparison mode">
+                <button type="button" id="compare_mode_count" class="compare-mode-tab active"
+                    onclick="ordinal_compare_set_mode('count')">Count Steps (Start → Target)</button>
+                <button type="button" id="compare_mode_advance" class="compare-mode-tab"
+                    onclick="ordinal_compare_set_mode('advance')">Step Forward (Start + N steps)</button>
             </div>
-            <div class="compare-input-row">
-                <label for="compare_target">Target sequence:</label>
-                <input type="text" id="compare_target" value="1,2,2" placeholder="e.g. 1,2,2"
-                    title="Target ω-Y sequence to reach (standard sequence at or below 1,3)">
+            <div class="compare-field-group">
+                <div class="compare-input-row">
+                    <label for="compare_start">Start sequence:</label>
+                    <input type="text" id="compare_start" value="1,1" placeholder="e.g. 1,1"
+                        title="Starting ω-Y sequence (standard sequence at or below 1,3)">
+                    <button type="button" id="compare_start_from_analyzer" class="compare-helper-btn"
+                        onclick="ordinal_compare_use_analyzer('start')"
+                        title="Copy the current sequence from the Analyzer tab">Use Analyzer</button>
+                </div>
+                <div id="compare_start_preview" class="compare-preview"></div>
+            </div>
+            <div id="compare_target_group" class="compare-field-group">
+                <div class="compare-input-row">
+                    <label for="compare_target">Target sequence:</label>
+                    <input type="text" id="compare_target" value="1,2,2" placeholder="e.g. 1,2,2"
+                        title="Target ω-Y sequence to reach (standard sequence at or below 1,3)">
+                    <button type="button" id="compare_target_from_analyzer" class="compare-helper-btn"
+                        onclick="ordinal_compare_use_analyzer('target')"
+                        title="Copy the current sequence from the Analyzer tab">Use Analyzer</button>
+                    <button type="button" id="compare_swap" class="compare-helper-btn"
+                        onclick="ordinal_compare_swap()"
+                        title="Swap Start and Target sequences">⇅ Swap</button>
+                </div>
+                <div id="compare_target_preview" class="compare-preview"></div>
+            </div>
+            <div id="compare_steps_group" class="compare-field-group" hidden>
+                <div class="compare-input-row">
+                    <label for="compare_steps">Steps (+1):</label>
+                    <input type="text" id="compare_steps" value="100" inputmode="numeric"
+                        placeholder="e.g. 100 or 1,000,000"
+                        title="Number of +1 steps to advance from the start sequence (non-negative integer)">
+                </div>
             </div>
             <div class="compare-settings">
                 <label for="compare_max_terms">Maximum terms:</label>
@@ -199,6 +228,9 @@
                 <label for="compare_base">Base:</label>
                 <input id="compare_base" type="number" min="2" step="1" value="3"
                     title="Base of the sequence for +1 maximization (at least 2).">
+                <button type="button" id="compare_sync_analyzer" class="compare-helper-btn"
+                    onclick="ordinal_compare_sync_analyzer()"
+                    title="Copy Maximum terms and Base from the Analyzer tab">Sync Analyzer</button>
                 <button type="button" id="compare_run" onclick="ordinal_compare_run()">Compare</button>
                 <button type="button" id="compare_cancel" onclick="ordinal_compare_cancel()" hidden>Cancel</button>
             </div>
