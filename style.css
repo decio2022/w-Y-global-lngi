@@ -509,7 +509,8 @@ h2 {
     white-space: nowrap;
 }
 
-.ordinal-input-row #search_input {
+.ordinal-input-row #search_input,
+.ordinal-input-row #inverse_input {
     flex: 1 1 auto;
     min-width: 0;
 }
@@ -521,11 +522,13 @@ h2 {
     margin-bottom: 10px;
 }
 
-#ordinal_walk_max_terms {
+#ordinal_walk_max_terms,
+#inverse_walk_max_terms {
     width: 5em;
 }
 
-#ordinal_walk_clicks {
+#ordinal_walk_clicks,
+#inverse_walk_clicks {
     color: #555;
     font-size: 0.9em;
     font-variant-numeric: tabular-nums;
@@ -533,7 +536,9 @@ h2 {
 }
 
 #ordinal_plus_one,
-#ordinal_max {
+#ordinal_max,
+#inverse_minus_one,
+#inverse_max {
     flex: 0 0 auto;
     padding: 4px 12px;
     border: 1px solid #bbb;
@@ -552,6 +557,48 @@ h2 {
 #ordinal_plus_one:active,
 #ordinal_max:active {
     background: #ffd84d;
+}
+
+/* the inverse input part (−1 walks down from 1,3 to 1,1) sits below the first one */
+#inverse_part {
+    background-color: #e6dcff;
+}
+
+#inverse_minus_one,
+#inverse_max {
+    background: #cfe8ff;
+}
+
+#inverse_minus_one:hover,
+#inverse_max:hover {
+    background: #b3daff;
+}
+
+#inverse_minus_one:active,
+#inverse_max:active {
+    background: #8cc6ff;
+}
+
+/* the part whose ordinal the analysis and the progress pages follow (the one used last) */
+.ordinal-part {
+    border: 2px solid transparent;
+    box-sizing: border-box;
+}
+
+.ordinal-part.active {
+    border-color: #2a7fd4;
+}
+
+.ordinal-part-badge {
+    display: none;
+    margin-top: 6px;
+    color: #1f5f9e;
+    font-size: 0.8em;
+    font-weight: bold;
+}
+
+.ordinal-part.active .ordinal-part-badge {
+    display: block;
 }
 
 .time-control-panel {

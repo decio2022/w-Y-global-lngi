@@ -104,11 +104,11 @@
     </div>
 
     <div id="future-milestone" hidden>
-        <div class="fmilestone-box2">
+        <div class="fmilestone-box2 ordinal-part active" id="ordinal_part">
             <div class="ordinal-input-row">
                 <label for="search_input">input ordinal:</label>
                 <input type="text" id="search_input" oninput="search_time()"
-                    title="The analysis part shows this ordinal (1,1 when nothing valid is searched)">
+                    title="The analysis part shows this ordinal (1,1 when nothing valid is searched) while this input is the one used last">
                 <button type="button" id="ordinal_plus_one" onclick="ordinal_plus_one()"
                     title="Walk standard ω-Y sequences up to the maximum number of terms. After 1,3, start again at 1,1.">+1</button>
                 <button type="button" id="ordinal_max" onclick="ordinal_max()"
@@ -122,6 +122,27 @@
                     title="How many times +1 was clicked to reach this sequence. It is kept when you leave and come back, and it resets to 0 when the maximum number of terms changes.">clicks: 0</span>
             </div>
             <span id="search_result">Please insert ordinal!</span>
+            <div class="ordinal-part-badge">shown in the analysis below</div>
+        </div>
+        <div class="fmilestone-box2 ordinal-part" id="inverse_part">
+            <div class="ordinal-input-row">
+                <label for="inverse_input">inverse ordinal:</label>
+                <input type="text" id="inverse_input"
+                    title="The inverse of the input above: −1 walks this ordinal down from 1,3 to 1,1. The analysis part shows whichever of the two inputs was used last.">
+                <button type="button" id="inverse_minus_one" onclick="inverse_minus_one()"
+                    title="The reverse of +1: walk the same standard ω-Y sequences down, starting at 1,3. After 1,1, start again at 1,3.">&minus;1</button>
+                <button type="button" id="inverse_max" onclick="inverse_max()"
+                    title="Same as −1, but keeps walking down until the sequence has as many terms as the maximum allows or reaches 1,1 (so with 5 terms: 1,2,4,8,1 → 1,2,4,7,11).">Max</button>
+            </div>
+            <div class="ordinal-walk-settings">
+                <label for="inverse_walk_max_terms">Maximum terms for &minus;1:</label>
+                <input id="inverse_walk_max_terms" type="number" min="2" step="1" value="10"
+                    title="The −1 walk uses at least two terms and restarts at 1,3 when this value changes.">
+                <span id="inverse_walk_clicks"
+                    title="How many times −1 was clicked to reach this sequence. It is kept when you leave and come back, and it resets to 0 when the maximum number of terms changes.">clicks: 0</span>
+            </div>
+            <span id="inverse_result">Please insert ordinal!</span>
+            <div class="ordinal-part-badge">shown in the analysis below</div>
         </div>
         <div class="analysis-toolbar" id="analysis_toolbar">
 
