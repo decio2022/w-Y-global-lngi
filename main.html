@@ -25,6 +25,7 @@
                 <button id="btn_progress">Progress</button>
                 <button id="btn_search_progress">Search Progress</button>
                 <button id="btn_search">Analyzer</button>
+                <button id="btn_compare">Compare</button>
                 <button id="mountain_btn">Visualizer</button>
                 <button id="settings_btn">Settings</button>
             </div>
@@ -177,6 +178,32 @@
         </div>
 
     
+    </div>
+
+    <div id="compare-mode" hidden>
+        <div class="fmilestone-box2 compare-box">
+            <div class="compare-input-row">
+                <label for="compare_start">Start sequence:</label>
+                <input type="text" id="compare_start" value="1,1" placeholder="e.g. 1,1"
+                    title="Starting ω-Y sequence (standard sequence at or below 1,3)">
+            </div>
+            <div class="compare-input-row">
+                <label for="compare_target">Target sequence:</label>
+                <input type="text" id="compare_target" value="1,2,2" placeholder="e.g. 1,2,2"
+                    title="Target ω-Y sequence to reach (standard sequence at or below 1,3)">
+            </div>
+            <div class="compare-settings">
+                <label for="compare_max_terms">Maximum terms:</label>
+                <input id="compare_max_terms" type="number" min="2" step="1" value="10"
+                    title="Maximum number of ω-Y terms per +1 step (at least 2).">
+                <label for="compare_base">Base:</label>
+                <input id="compare_base" type="number" min="2" step="1" value="3"
+                    title="Base of the sequence for +1 maximization (at least 2).">
+                <button type="button" id="compare_run" onclick="ordinal_compare_run()">Compare</button>
+                <button type="button" id="compare_cancel" onclick="ordinal_compare_cancel()" hidden>Cancel</button>
+            </div>
+            <div id="compare_result" class="compare-result">Enter a start and target sequence, then click Compare.</div>
+        </div>
     </div>
 
     <div id="mountain" hidden>

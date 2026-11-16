@@ -80,7 +80,7 @@ if (Scratch_bar_height) Scratch_bar_height.addEventListener("input", function ()
     );
 });
 
-let page = 2; // 0: main, 1: progress, 2: milestone (and 3: some cool mountain), 4: real milestones, 5: buddy, 6: credits, 7: progress of the searched ordinal
+let page = 2; // 0: main, 1: progress, 2: milestone (and 3: some cool mountain), 4: real milestones, 5: buddy, 6: credits, 7: progress of the searched ordinal, 8: compare
 //did u even do that
 //just compress it into a SINGLE FUNCTION thats so good :3
 
@@ -112,6 +112,14 @@ btn_search.addEventListener("click", () => {
     update_page()
 });
 
+const btn_compare = document.getElementById("btn_compare");
+if (btn_compare) {
+    btn_compare.addEventListener("click", () => {
+        page = 8;
+        update_page()
+    });
+}
+
 
 
 const btn_mountain = document.getElementById("mountain_btn");
@@ -134,6 +142,10 @@ function update_page() {
     if (document.getElementById("future-milestone")) {
         document.getElementById("future-milestone").hidden = (page != 2)
         document.getElementById("future-milestone").style.display = page == 2 ? "flex" : "none"
+    }
+    if (document.getElementById("compare-mode")) {
+        document.getElementById("compare-mode").hidden = (page != 8)
+        document.getElementById("compare-mode").style.display = page == 8 ? "flex" : "none"
     }
     if (document.getElementById("mountain")) document.getElementById("mountain").hidden = (page != 3)
 }
@@ -192,6 +204,14 @@ function saveAllSettings() {
         ordinal_walk_max_terms: Number(document.getElementById("ordinal_walk_max_terms").value),
         ordinal_walk_base: Number(document.getElementById("ordinal_walk_base").value),
 
+        // Compare Mode Settings
+        compare_start: document.getElementById("compare_start") ? document.getElementById("compare_start").value : "1,1",
+        compare_target: document.getElementById("compare_target") ? document.getElementById("compare_target").value : "1,2,2",
+        compare_max_terms: document.getElementById("compare_max_terms") && Number(document.getElementById("compare_max_terms").value) >= 2
+            ? Math.floor(Number(document.getElementById("compare_max_terms").value)) : 10,
+        compare_base: document.getElementById("compare_base") && Number(document.getElementById("compare_base").value) >= 2
+            ? Math.floor(Number(document.getElementById("compare_base").value)) : 3,
+
         // Milestone Settings
         Scratch_bar_height: (document.getElementById("Scratch_bar_height") ? Number(document.getElementById("Scratch_bar_height").value) : 24),
 
@@ -245,7 +265,7 @@ function loadAllSettings() {
         const settings = JSON.parse(savedData);
 
         // Helper function to safely apply values if they exist in storage
-        const setVal = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.value = val; };
+        const setVal = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined && val !== null) el.value = val; };
         const setCheck = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.checked = val; };
 
         // Apply values
@@ -257,6 +277,10 @@ function loadAllSettings() {
         setVal("BMS_Terms", settings.BMS_Terms);
         setVal("ordinal_walk_max_terms", settings.ordinal_walk_max_terms);
         setVal("ordinal_walk_base", settings.ordinal_walk_base);
+        setVal("compare_start", settings.compare_start);
+        setVal("compare_target", settings.compare_target);
+        setVal("compare_max_terms", settings.compare_max_terms);
+        setVal("compare_base", settings.compare_base);
         setVal("Scratch_bar_height", settings.Scratch_bar_height);
         setVal("ROWHEIGHT", settings.ROWHEIGHT);
         setVal("COLUMNWIDTH", settings.COLUMNWIDTH);
@@ -285,7 +309,9 @@ function loadAllSettings() {
 function attachAutoSaveListeners() {
     const selectorIds = [
         "font_family", "font_size", "compress_bms", "format_cOCF",
-        "Y_Terms", "BMS_Terms", "ordinal_walk_max_terms", "ordinal_walk_base", "Scratch_bar_height",
+        "Y_Terms", "BMS_Terms", "ordinal_walk_max_terms", "ordinal_walk_base",
+        "compare_start", "compare_target", "compare_max_terms", "compare_base",
+        "Scratch_bar_height",
         "ROWHEIGHT", "COLUMNWIDTH", "LINETHICKNESS", "NUMBERSIZE", "NUMBERTHICKNESS",
         "MAXDIMENSIONS", "MaxTerms", "STACKMODE", "HIGHLIGHT", "EXTRADIVIDER", "_UPDATEMODE"
     ];

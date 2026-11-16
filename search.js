@@ -816,6 +816,446 @@ if (ordinalWalkBaseEl) ordinalWalkBaseEl.addEventListener("input", () => {
     ordinal_walk_save()
 })
 
+// --- Comparison mode: exact +1 step counter between two ω-Y sequences ---
+
+function ordinal_walk_parse_sequence(raw) {
+    const t = Array.isArray(raw) ? raw.join(",") : String(raw ?? "").trim()
+    if (!t) return { ok: false, reason: "empty" }
+    if (!/^\d+(\s*,\s*\d+)*$/.test(t)) return { ok: false, reason: "malformed" }
+    const arr = t.split(",").map(p => Number(p.trim()))
+    if (arr.length < 2 || !arr.every(n => Number.isSafeInteger(n) && n >= 1)) {
+        return { ok: false, reason: "malformed" }
+    }
+    if (!ordinal_walk_le(arr, ORDINAL_WALK_CAP)) return { ok: false, reason: "above_cap" }
+    if (!ordinal_walk_standard(arr)) return { ok: false, reason: "non_standard" }
+    return { ok: true, seq: arr.join(","), arr }
+}
+
+function ordinal_compare_format_bigint(n) {
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+}
+
+function ordinal_compare_escape(s) {
+    return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+}
+
+//Create an incremental, exact BigInt step counter for the +1 walk from `start`
+//to `target` under `maxTerms` and `base`. Because `maximizeordinal` is
+//order-preserving, every +1 step moves to the exact next valid fixed point in
+//ordinal order, so the step count equals the number of valid fixed points X in
+//(start, maximizeordinal(target, base, maxTerms)] with length <= maxTerms.
+//Uses an explicit stack with additive-prefix memoization and O(1) leaf rules
+//so large queries can be time-sliced without blocking the UI.
+function ordinal_walk_create_counter(start, target, maxTerms = ordinal_walk_limit(), base = ordinal_walk_base_limit()) {
+    const parsedStart = ordinal_walk_parse_sequence(start)
+    if (!parsedStart.ok) {
+        return {
+            step() {
+                return { done: true, result: { status: "invalid_start", reason: parsedStart.reason }, work: 0 }
+            },
+        }
+    }
+    const parsedTarget = ordinal_walk_parse_sequence(target)
+    if (!parsedTarget.ok) {
+        return {
+            step() {
+                return { done: true, result: { status: "invalid_target", reason: parsedTarget.reason }, work: 0 }
+            },
+        }
+    }
+
+    const effMax = Math.floor(Number(maxTerms))
+    if (!isFinite(effMax) || effMax < 2) {
+        return {
+            step() {
+                return { done: true, result: { status: "invalid_max_terms" }, work: 0 }
+            },
+        }
+    }
+    const effBase = Math.floor(Number(base))
+    if (!isFinite(effBase) || effBase < 2) {
+        return {
+            step() {
+                return { done: true, result: { status: "invalid_base" }, work: 0 }
+            },
+        }
+    }
+
+    const startStr = parsedStart.seq
+    const targetStr = parsedTarget.seq
+    const cmpST = Y_Sequence.cmp(parsedStart.arr, parsedTarget.arr)
+    if (cmpST === 0) {
+        return {
+            step() {
+                return {
+                    done: true,
+                    result: {
+                        status: "same",
+                        steps: 0n,
+                        start: startStr,
+                        target: targetStr,
+                        effectiveTarget: targetStr,
+                        skippedTarget: false,
+                        maxTerms: effMax,
+                        base: effBase,
+                    },
+                    work: 0,
+                }
+            },
+        }
+    }
+    if (cmpST > 0) {
+        return {
+            step() {
+                return {
+                    done: true,
+                    result: {
+                        status: "start_greater",
+                        steps: null,
+                        start: startStr,
+                        target: targetStr,
+                        maxTerms: effMax,
+                        base: effBase,
+                    },
+                    work: 0,
+                }
+            },
+        }
+    }
+
+    const effTargetStr = maximizeordinal(targetStr, effBase, effMax)
+    const skippedTarget = effTargetStr !== targetStr
+    const startArr = parsedStart.arr
+    const targetArr = effTargetStr.split(",").map(Number)
+
+    const memo = new Map()
+    const fsCache = new Map()
+    let work = 0
+
+    function lcpLen(a, b) {
+        const n = Math.min(a.length, b.length)
+        let i = 0
+        while (i < n && a[i] === b[i]) i++
+        return i
+    }
+
+    function cachedFs(hiStr, k) {
+        const ck = hiStr + "|" + k
+        let res = fsCache.get(ck)
+        if (res === undefined) {
+            res = ordinal_walk_fs(hiStr, k).split(",").map(Number)
+            fsCache.set(ck, res)
+        }
+        return res
+    }
+
+    function prepare(loArr, hiArr, inclHi, remMax) {
+        while (true) {
+            if (remMax <= 0) return 0n
+            if (Y_Sequence.cmp(loArr, hiArr) >= 0) return 0n
+
+            const lcp = lcpLen(loArr, hiArr)
+            if (lcp >= remMax) return 0n
+
+            //O(1) leaf count when lo and hi agree on the first remMax - 1 terms:
+            //every standard [prefix, k] < hi is fixed under effBase >= 2.
+            if (lcp === remMax - 1) {
+                const loVal = loArr.length > lcp ? loArr[lcp] : 0
+                const hiVal = hiArr[lcp]
+                const upper = (hiArr.length === remMax && !inclHi) ? hiVal - 1 : hiVal
+                return upper > loVal ? BigInt(upper - loVal) : 0n
+            }
+
+            //Additive prefix invariance: entries starting at 1 have no parent
+            //in the prefix, so the prefix only reduces the remaining term budget.
+            let stripP = -1
+            for (let p = Math.min(lcp, hiArr.length - 1); p >= 1; p--) {
+                if (hiArr[p] === 1 && (loArr.length === p || loArr[p] === 1)) {
+                    stripP = p
+                    break
+                }
+            }
+            if (stripP !== -1) {
+                loArr = loArr.slice(stripP)
+                hiArr = hiArr.slice(stripP)
+                remMax -= stripP
+                continue
+            }
+
+            //O(1)-FS leaf shortcut at length remMax - 1 when lo starts with [pre, v - 1]:
+            //only c_base = ordinal_walk_fs(hi, effBase) determines the upper bound at index remMax - 1.
+            if (hiArr.length === remMax - 1 && hiArr[hiArr.length - 1] >= 2 && lcp === remMax - 2) {
+                const v = hiArr[remMax - 2]
+                const loTail = loArr.length >= remMax - 1 ? loArr[remMax - 2] : 0
+                if (loTail === v - 1) {
+                    const cBase = cachedFs(hiArr.join(","), effBase)
+                    if (cBase.length >= remMax) {
+                        const loVal = loArr.length >= remMax ? loArr[remMax - 1] : 0
+                        const hiVal = cBase[remMax - 1]
+                        const upper = (cBase.length === remMax) ? hiVal - 1 : hiVal
+                        const sub = upper > loVal ? BigInt(upper - loVal) : 0n
+                        return sub + (inclHi ? 1n : 0n)
+                    }
+                }
+            }
+
+            const hiStr = hiArr.join(",")
+            const loStr = loArr.join(",")
+            const key = loStr + "|" + hiStr + "|" + (inclHi ? "1" : "0") + "|" + remMax
+            const cached = memo.get(key)
+            if (cached !== undefined) return cached
+
+            const pre = hiArr.slice(0, -1)
+            if (pre.length > 0 && Y_Sequence.cmp(loArr, pre) < 0) {
+                return {
+                    key, acc: 0n, idx: 0,
+                    children: [
+                        [loArr, pre, true, remMax],
+                        [pre, hiArr, inclHi, remMax],
+                    ],
+                }
+            }
+
+            const v = hiArr[hiArr.length - 1]
+            if (v <= 1) {
+                const val = (inclHi && hiArr.length <= remMax) ? 1n : 0n
+                memo.set(key, val)
+                return val
+            }
+
+            const stepDown = pre.concat([v - 1])
+            if (Y_Sequence.cmp(loArr, stepDown) < 0) {
+                return {
+                    key, acc: 0n, idx: 0,
+                    children: [
+                        [loArr, stepDown, true, remMax],
+                        [stepDown, hiArr, inclHi, remMax],
+                    ],
+                }
+            }
+
+            const children = []
+            let prevChild = pre
+            for (let k = 1; k <= effBase; k++) {
+                const childArr = cachedFs(hiStr, k)
+                if (Y_Sequence.cmp(loArr, childArr) < 0) {
+                    const subLo = Y_Sequence.cmp(loArr, prevChild) > 0 ? loArr : prevChild
+                    children.push([subLo, childArr, k < effBase, remMax])
+                }
+                prevChild = childArr
+            }
+            const baseAcc = (inclHi && hiArr.length <= remMax) ? 1n : 0n
+            if (children.length === 0) {
+                memo.set(key, baseAcc)
+                return baseAcc
+            }
+            return { key, acc: baseAcc, idx: 0, children }
+        }
+    }
+
+    const stack = []
+    let finalSteps = null
+    const init = prepare(startArr, targetArr, true, effMax)
+    if (typeof init === "bigint") {
+        finalSteps = init
+    } else {
+        stack.push(init)
+    }
+
+    return {
+        step(budget = Infinity) {
+            let used = 0
+            while (stack.length > 0 && used < budget) {
+                used++
+                work++
+                const top = stack[stack.length - 1]
+                if (top.idx >= top.children.length) {
+                    memo.set(top.key, top.acc)
+                    stack.pop()
+                    if (stack.length > 0) {
+                        stack[stack.length - 1].acc += top.acc
+                    } else {
+                        finalSteps = top.acc
+                    }
+                    continue
+                }
+                const ch = top.children[top.idx++]
+                const res = prepare(ch[0], ch[1], ch[2], ch[3])
+                if (typeof res === "bigint") {
+                    top.acc += res
+                } else {
+                    stack.push(res)
+                }
+            }
+            if (stack.length === 0) {
+                return {
+                    done: true,
+                    result: {
+                        status: "ok",
+                        steps: finalSteps,
+                        start: startStr,
+                        target: targetStr,
+                        effectiveTarget: effTargetStr,
+                        skippedTarget,
+                        maxTerms: effMax,
+                        base: effBase,
+                    },
+                    work,
+                }
+            }
+            return { done: false, result: null, work }
+        },
+    }
+}
+
+//Synchronous helper returning the exact step count result object.
+function ordinal_walk_count_steps(start, target, maxTerms = ordinal_walk_limit(), base = ordinal_walk_base_limit(), maxWork = 0) {
+    const counter = ordinal_walk_create_counter(start, target, maxTerms, base)
+    const tick = counter.step(maxWork > 0 ? maxWork : Infinity)
+    if (!tick.done) {
+        return { status: "limit_exceeded", work: tick.work }
+    }
+    return tick.result
+}
+
+let ordinal_compare_job_id = 0
+let ordinal_compare_timer = null
+
+function ordinal_compare_set_running(running) {
+    const cancelBtn = document.getElementById("compare_cancel")
+    if (cancelBtn) cancelBtn.hidden = !running
+}
+
+function ordinal_compare_render_result(res) {
+    const resultEl = document.getElementById("compare_result")
+    if (!resultEl) return
+
+    if (res.status === "invalid_start" || res.status === "invalid_target") {
+        const label = res.status === "invalid_start" ? "Start" : "Target"
+        let msg
+        if (res.reason === "empty") msg = `Please enter a ${label.toLowerCase()} ω-Y sequence (for example, 1,1).`
+        else if (res.reason === "above_cap") msg = `${label} sequence exceeds the walk limit 1,3.`
+        else if (res.reason === "non_standard") msg = `${label} sequence is not a standard ω-Y sequence.`
+        else msg = `${label} sequence must be comma-separated positive integers with at least 2 terms (for example, 1,2).`
+        resultEl.innerHTML = `<div class="compare-result-error">${ordinal_compare_escape(msg)}</div>`
+        return
+    }
+
+    if (res.status === "invalid_max_terms") {
+        resultEl.innerHTML = `<div class="compare-result-error">Maximum terms must be an integer of at least 2.</div>`
+        return
+    }
+
+    if (res.status === "invalid_base") {
+        resultEl.innerHTML = `<div class="compare-result-error">Base must be an integer of at least 2.</div>`
+        return
+    }
+
+    if (res.status === "same") {
+        resultEl.innerHTML =
+            `<div class="compare-result-steps">0 steps</div>` +
+            `<div class="compare-result-meta">Start and target are the same sequence (${ordinal_compare_escape(res.start)}).</div>`
+        return
+    }
+
+    if (res.status === "start_greater") {
+        resultEl.innerHTML =
+            `<div class="compare-result-error">Start (${ordinal_compare_escape(res.start)}) is greater than target (${ordinal_compare_escape(res.target)}). Target must be at least start.</div>`
+        return
+    }
+
+    if (res.status === "ok") {
+        const stepsFmt = ordinal_compare_format_bigint(res.steps)
+        const unit = res.steps === 1n ? "step" : "steps"
+        let html =
+            `<div class="compare-result-steps">${stepsFmt} ${unit}</div>` +
+            `<div class="compare-result-meta">From ${ordinal_compare_escape(res.start)} to ${ordinal_compare_escape(res.target)} (Maximum terms: ${res.maxTerms}, Base: ${res.base})</div>`
+        if (res.skippedTarget) {
+            html += `<div class="compare-result-note">Note: ${ordinal_compare_escape(res.target)} is skipped under Maximum terms ${res.maxTerms}, Base ${res.base} (auto-maximizes to ${ordinal_compare_escape(res.effectiveTarget)}). This is the number of steps to reach &ge; ${ordinal_compare_escape(res.target)} (landing on ${ordinal_compare_escape(res.effectiveTarget)}).</div>`
+        }
+        resultEl.innerHTML = html
+    }
+}
+
+function ordinal_compare_cancel(showMessage = true) {
+    ordinal_compare_job_id++
+    if (ordinal_compare_timer !== null && typeof clearTimeout === "function") {
+        clearTimeout(ordinal_compare_timer)
+        ordinal_compare_timer = null
+    }
+    ordinal_compare_set_running(false)
+    if (showMessage) {
+        const resultEl = document.getElementById("compare_result")
+        if (resultEl) {
+            resultEl.innerHTML = `<div class="compare-result-meta">Comparison cancelled.</div>`
+        }
+    }
+}
+
+function ordinal_compare_run() {
+    ordinal_compare_cancel(false)
+    const jobId = ordinal_compare_job_id
+
+    const startEl = document.getElementById("compare_start")
+    const targetEl = document.getElementById("compare_target")
+    const maxEl = document.getElementById("compare_max_terms")
+    const baseEl = document.getElementById("compare_base")
+    const resultEl = document.getElementById("compare_result")
+
+    const startVal = startEl ? startEl.value : ""
+    const targetVal = targetEl ? targetEl.value : ""
+    const maxVal = maxEl ? maxEl.value : ""
+    const baseVal = baseEl ? baseEl.value : ""
+
+    const counter = ordinal_walk_create_counter(startVal, targetVal, maxVal, baseVal)
+    const first = counter.step(2500)
+    if (first.done) {
+        ordinal_compare_render_result(first.result)
+        return first.result
+    }
+
+    if (typeof setTimeout !== "function") {
+        const rest = counter.step(Infinity)
+        ordinal_compare_render_result(rest.result)
+        return rest.result
+    }
+
+    ordinal_compare_set_running(true)
+    if (resultEl) {
+        resultEl.innerHTML = `<div class="compare-result-meta">Calculating steps from ${ordinal_compare_escape(String(startVal).trim())} to ${ordinal_compare_escape(String(targetVal).trim())}...</div>`
+    }
+
+    function pump() {
+        if (jobId !== ordinal_compare_job_id) return
+        const tick = counter.step(4000)
+        if (tick.done) {
+            ordinal_compare_timer = null
+            ordinal_compare_set_running(false)
+            ordinal_compare_render_result(tick.result)
+            return
+        }
+        ordinal_compare_timer = setTimeout(pump, 0)
+    }
+
+    ordinal_compare_timer = setTimeout(pump, 0)
+    return null
+}
+
+for (const compareInputId of ["compare_start", "compare_target", "compare_max_terms", "compare_base"]) {
+    const el = document.getElementById(compareInputId)
+    if (!el) continue
+    el.addEventListener("keydown", e => {
+        if (e && e.key === "Enter") ordinal_compare_run()
+    })
+    el.addEventListener("input", () => {
+        if (ordinal_compare_timer !== null) ordinal_compare_cancel(false)
+    })
+}
+
 function go_2048() {
     document.getElementById('sex').value = '1,2,4,8,16,32,64,128,256,512,1024,2048'
     specific_time()

@@ -20,12 +20,12 @@ function element(id) {
     });
     return elements.get(id);
 }
-function trigger(id, type) {
-    for (const fn of listeners.get(`${id}:${type}`) || []) fn();
+function trigger(id, type, event) {
+    for (const fn of listeners.get(`${id}:${type}`) || []) fn(event);
 }
 const storage = new Map();
 const context = vm.createContext({
-    console: { log() {}, warn() {}, error() {} }, Date, Math, Number,
+    console: { log() {}, warn() {}, error() {} }, Date, Math, Number, setTimeout, clearTimeout,
     document: { getElementById: element, createElement: () => element(Math.random()),
         querySelectorAll: () => [], getElementsByClassName: () => [] },
     window: { addEventListener() {} },
@@ -248,3 +248,226 @@ test('invalid input falls back safely and later milestones cannot overfill the c
     assert.equal(element('main_lngi_bar').style.width, '100%');
     assert.ok(Array.from({ length: 53 }, (_, i) => element(`bar_${i}`).hidden).every(Boolean));
 });
+
+test('comparison mode computes exact +1 step counts, skipped targets, and edge cases', () => {
+    // Exact step counts verified against +1 walk
+    const exactCases = [
+        ['1,1', '1,2', 10, 3, 2n, false, '1,2'],
+        ['1,1', '1,2,2', 10, 3, 14n, false, '1,2,2'],
+        ['1,1', '1,2,3', 10, 3, 61n, false, '1,2,3'],
+        ['1,1', '1,2,4', 10, 3, 1254n, false, '1,2,4'],
+        ['1,2,4', '1,2,4,4', 10, 3, 2971n, false, '1,2,4,4'],
+        ['1,1', '1,2,4,4', 10, 3, 4225n, false, '1,2,4,4'],
+        ['1,2,4', '1,2,4,1,2,4', 10, 3, 146n, false, '1,2,4,1,2,4'],
+        ['1,1', '1,3', 5, 2, 21n, false, '1,3'],
+        ['1,1', '1,3', 7, 3, 1634n, false, '1,3'],
+        // Skipped targets: base limit, terms limit, skipped tower
+        ['1,1', '1,1,1,1', 10, 3, 2n, true, '1,2'],
+        ['1,2,4', '1,2,4,1,1', 4, 3, 2n, true, '1,2,4,2'],
+        ['1,2,4', '1,2,4,3,5,4,6,5', 10, 3, 2971n, true, '1,2,4,4'],
+        // Non-fixed starts (base-skipped and length > maxTerms)
+        ['1,1,1,1', '1,2,2', 10, 3, 13n, false, '1,2,2'],
+        ['1,1,1,1', '1,1,1,1,1', 10, 3, 1n, true, '1,2'],
+        ['1,1,1,1,1', '1,2', 4, 10, 1n, false, '1,2'],
+    ];
+    for (const [start, target, maxTerms, base, steps, skipped, effTarget] of exactCases) {
+        const res = run(`ordinal_walk_count_steps(${JSON.stringify(start)}, ${JSON.stringify(target)}, ${maxTerms}, ${base})`);
+        assert.equal(res.status, 'ok', `${start} -> ${target}`);
+        assert.equal(res.steps, steps, `${start} -> ${target}`);
+        assert.equal(res.skippedTarget, skipped, `${start} -> ${target}`);
+        assert.equal(res.effectiveTarget, effTarget, `${start} -> ${target}`);
+    }
+
+    // Brute-force agreement on a full walk
+    const fullSeqs = run(`(() => {
+        const out = ['1,1'];
+        let cur = [1, 1];
+        while (cur.join(',') !== '1,3') {
+            cur = ordinal_walk_next(cur, 5, 3);
+            out.push(cur.join(','));
+        }
+        return out;
+    })()`);
+    const lastIdx = fullSeqs.length - 1;
+    for (const [i, j] of [[0, 1], [0, lastIdx], [3, 15], [7, 29], [12, lastIdx]]) {
+        const res = run(`ordinal_walk_count_steps(${JSON.stringify(fullSeqs[i])}, ${JSON.stringify(fullSeqs[j])}, 5, 3)`);
+        assert.equal(res.status, 'ok');
+        assert.equal(res.steps, BigInt(j - i));
+        assert.equal(res.skippedTarget, false);
+    }
+
+    // Chunked execution matches synchronous execution exactly
+    const chunked = run(`(() => {
+        const c = ordinal_walk_create_counter('1,1', '1,2,4', 10, 3);
+        let ticks = 0;
+        let t;
+        do { t = c.step(25); ticks++; } while (!t.done);
+        return { ticks, steps: t.result.steps, status: t.result.status };
+    })()`);
+    assert.equal(chunked.status, 'ok');
+    assert.equal(chunked.steps, 1254n);
+    assert.ok(chunked.ticks > 1, 'expected multi-chunk execution');
+
+    // Same, start > target, and invalid inputs
+    const same = run(`ordinal_walk_count_steps('1,2,2', '1,2,2', 10, 3)`);
+    assert.equal(same.status, 'same');
+    assert.equal(same.steps, 0n);
+
+    const greater = run(`ordinal_walk_count_steps('1,2,3', '1,2,2', 10, 3)`);
+    assert.equal(greater.status, 'start_greater');
+
+    assert.equal(run(`ordinal_walk_count_steps('', '1,2', 10, 3)`).status, 'invalid_start');
+    assert.equal(run(`ordinal_walk_count_steps('1,0', '1,2', 10, 3)`).status, 'invalid_start');
+    assert.equal(run(`ordinal_walk_count_steps('1', '1,2', 10, 3)`).status, 'invalid_start');
+    assert.equal(run(`ordinal_walk_count_steps('1,4', '1,3', 10, 3)`).reason, 'above_cap');
+    assert.equal(run(`ordinal_walk_count_steps('1,1', '1,2,5', 10, 3)`).reason, 'non_standard');
+    assert.equal(run(`ordinal_walk_count_steps('1,1', '1,2', 1, 3)`).status, 'invalid_max_terms');
+    assert.equal(run(`ordinal_walk_count_steps('1,1', '1,2', 10, 1)`).status, 'invalid_base');
+});
+
+test('comparison mode UI renders step count & status, supports cancel, and wires Compare tab', async () => {
+    // Normal run
+    element('compare_start').value = '1,1';
+    element('compare_target').value = '1,2,2';
+    element('compare_max_terms').value = '10';
+    element('compare_base').value = '3';
+    run('ordinal_compare_run()');
+    assert.match(element('compare_result').innerHTML, /14 steps/);
+    assert.ok(!element('compare_result').innerHTML.includes('compare-result-note'));
+    assert.equal(element('compare_cancel').hidden, true);
+
+    // Singular "1 step" and Enter key trigger
+    element('compare_start').value = '1,1';
+    element('compare_target').value = '1,1,1';
+    trigger('compare_target', 'keydown', { key: 'Enter' });
+    assert.match(element('compare_result').innerHTML, /1 step<\/div>/);
+
+    // Skipped target note
+    element('compare_start').value = '1,1';
+    element('compare_target').value = '1,1,1,1';
+    run('ordinal_compare_run()');
+    assert.match(element('compare_result').innerHTML, /2 steps/);
+    assert.match(element('compare_result').innerHTML, /compare-result-note/);
+    assert.match(element('compare_result').innerHTML, /1,2/);
+
+    // Same sequence and start > target
+    element('compare_start').value = '1,2';
+    element('compare_target').value = '1,2';
+    run('ordinal_compare_run()');
+    assert.match(element('compare_result').innerHTML, /0 steps/);
+
+    element('compare_start').value = '1,2,3';
+    element('compare_target').value = '1,2';
+    run('ordinal_compare_run()');
+    assert.match(element('compare_result').innerHTML, /greater than target/);
+
+    // Invalid input
+    element('compare_start').value = '1,2,5';
+    element('compare_target').value = '1,3';
+    run('ordinal_compare_run()');
+    assert.match(element('compare_result').innerHTML, /not a standard/);
+
+    // Async chunked job + cancel button
+    element('compare_start').value = '1,1';
+    element('compare_target').value = '1,3';
+    element('compare_max_terms').value = '9';
+    element('compare_base').value = '3';
+    const asyncRet = run('ordinal_compare_run()');
+    assert.equal(asyncRet, null);
+    assert.equal(element('compare_cancel').hidden, false);
+    assert.match(element('compare_result').innerHTML, /Calculating steps/);
+    run('ordinal_compare_cancel()');
+    assert.equal(element('compare_cancel').hidden, true);
+    assert.match(element('compare_result').innerHTML, /Comparison cancelled/);
+
+    // Async chunked completion (small enough to finish quickly in test)
+    element('compare_start').value = '1,1';
+    element('compare_target').value = '1,3';
+    element('compare_max_terms').value = '8';
+    element('compare_base').value = '3';
+    run('ordinal_compare_run()');
+    await new Promise(resolve => {
+        const check = () => {
+            if (element('compare_cancel').hidden && /8,696 steps/.test(element('compare_result').innerHTML)) {
+                resolve();
+            } else {
+                setTimeout(check, 5);
+            }
+        };
+        setTimeout(check, 5);
+    });
+    assert.match(element('compare_result').innerHTML, /8,696 steps/);
+
+    // Verify Compare tab wiring in main.html & ui.js
+    const html = fs.readFileSync(path.join(root, 'main.html'), 'utf8');
+    assert.ok(html.includes('id="btn_compare"'));
+    assert.ok(html.includes('id="compare-mode"'));
+    assert.ok(html.includes('id="compare_start"'));
+    assert.ok(html.includes('id="compare_target"'));
+    assert.ok(html.includes('id="compare_max_terms"'));
+    assert.ok(html.includes('id="compare_base"'));
+    assert.ok(html.includes('id="compare_run"'));
+    assert.ok(html.includes('id="compare_cancel"'));
+    assert.ok(html.includes('id="compare_result"'));
+
+    // Execute ui.js in an isolated context to verify tab switching and settings save/load
+    const uiEls = new Map();
+    const uiListeners = new Map();
+    const uiStorage = new Map();
+    const uiEl = id => {
+        if (id === 'mile_date' || id === 'mile_month' || id === 'mile_year') return null;
+        if (!uiEls.has(id)) uiEls.set(id, {
+            id, value: '', style: { display: '' }, checked: false, hidden: false,
+            addEventListener(t, fn) { uiListeners.set(`${id}:${t}`, fn); },
+        });
+        return uiEls.get(id);
+    };
+    const uiCtx = vm.createContext({
+        console: { log() {}, warn() {}, error() {} },
+        Date, Math, Number, String, JSON, Object, Array,
+        document: {
+            getElementById: uiEl,
+            querySelector: () => ({ style: {} }),
+            querySelectorAll: () => [],
+            addEventListener() {},
+            body: { style: {} },
+        },
+        window: { addEventListener() {} },
+        localStorage: {
+            getItem: k => uiStorage.has(k) ? uiStorage.get(k) : null,
+            setItem: (k, v) => uiStorage.set(k, String(v)),
+        },
+        update_search_progress() {},
+        update_milestone_display() {},
+        update_milestone_countdown() {},
+        setInterval() {},
+    });
+    vm.runInContext(fs.readFileSync(path.join(root, 'ui.js'), 'utf8'), uiCtx);
+    vm.runInContext('update_page()', uiCtx);
+    assert.equal(uiEl('compare-mode').hidden, true);
+    assert.equal(uiEl('compare-mode').style.display, 'none');
+    assert.equal(uiEl('future-milestone').hidden, false);
+    uiListeners.get('btn_compare:click')();
+    assert.equal(vm.runInContext('page', uiCtx), 8);
+    assert.equal(uiEl('compare-mode').hidden, false);
+    assert.equal(uiEl('compare-mode').style.display, 'flex');
+    assert.equal(uiEl('future-milestone').hidden, true);
+    assert.equal(uiEl('future-milestone').style.display, 'none');
+
+    // Settings round-trip for compare inputs
+    uiEl('compare_start').value = '1,2';
+    uiEl('compare_target').value = '1,2,4';
+    uiEl('compare_max_terms').value = '12';
+    uiEl('compare_base').value = '4';
+    vm.runInContext('saveAllSettings()', uiCtx);
+    uiEl('compare_start').value = '';
+    uiEl('compare_target').value = '';
+    uiEl('compare_max_terms').value = '';
+    uiEl('compare_base').value = '';
+    vm.runInContext('loadAllSettings()', uiCtx);
+    assert.equal(uiEl('compare_start').value, '1,2');
+    assert.equal(uiEl('compare_target').value, '1,2,4');
+    assert.equal(String(uiEl('compare_max_terms').value), '12');
+    assert.equal(String(uiEl('compare_base').value), '4');
+});
+
