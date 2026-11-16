@@ -58,7 +58,7 @@
                 Progress of the ordinal searched in the Analyzer tab:
                 <span id="search_progress_source"></span><br>
                 <small><i>The top bar always targets 1,3. Below it, the original LNGI milestone bars
-                    follow this searched sequence, including +1 and Max changes. Max ω-Y Terms in
+                    follow this searched sequence, including +1 changes. Max ω-Y Terms in
                     Settings limits their depth (0 means unlimited); it does not change the input.</i></small>
             </span>
         </div>
@@ -110,16 +110,17 @@
                 <input type="text" id="search_input" oninput="search_time()"
                     title="The analysis part shows this ordinal (1,1 when nothing valid is searched)">
                 <button type="button" id="ordinal_plus_one" onclick="ordinal_plus_one()"
-                    title="Walk standard ω-Y sequences up to the maximum number of terms. After 1,3, start again at 1,1.">+1</button>
-                <button type="button" id="ordinal_max" onclick="ordinal_max()"
-                    title="Same as +1, but keeps walking until the sequence has as many terms as the maximum allows (so with 5 terms: 1,1,1,1,1 → 1,2,1,1,1 → 1,2,1,2,1).">Max</button>
+                    title="Add +1 (successor) to the ω-Y sequence and automatically maximize when the base limit or maximum terms limit is reached. After 1,3, start again at 1,1.">+1</button>
             </div>
             <div class="ordinal-walk-settings">
                 <label for="ordinal_walk_max_terms">Maximum terms for +1:</label>
                 <input id="ordinal_walk_max_terms" type="number" min="2" step="1" value="10"
-                    title="The +1 walk uses at least two terms and restarts when this value changes.">
+                    title="Maximum number of ω-Y terms for +1 (at least 2). Automatically maximizes when exceeded, and restarts when changed.">
+                <label for="ordinal_walk_base">Base:</label>
+                <input id="ordinal_walk_base" type="number" min="2" step="1" value="3"
+                    title="Base of the sequence for +1 maximization (at least 2). Automatically maximizes when a fundamental-sequence step reaches this base, and restarts when changed.">
                 <span id="ordinal_walk_clicks"
-                    title="How many times +1 was clicked to reach this sequence. It is kept when you leave and come back, and it resets to 0 when the maximum number of terms changes.">clicks: 0</span>
+                    title="How many times +1 was clicked to reach this sequence. It is kept when you leave and come back, and it resets to 0 when the maximum number of terms or base changes.">clicks: 0</span>
             </div>
             <span id="search_result">Please insert ordinal!</span>
         </div>

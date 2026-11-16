@@ -516,12 +516,14 @@ h2 {
 
 .ordinal-walk-settings {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
     margin-bottom: 10px;
 }
 
-#ordinal_walk_max_terms {
+#ordinal_walk_max_terms,
+#ordinal_walk_base {
     width: 5em;
 }
 
@@ -532,8 +534,7 @@ h2 {
     white-space: nowrap;
 }
 
-#ordinal_plus_one,
-#ordinal_max {
+#ordinal_plus_one {
     flex: 0 0 auto;
     padding: 4px 12px;
     border: 1px solid #bbb;
@@ -544,13 +545,11 @@ h2 {
     font-weight: bold;
 }
 
-#ordinal_plus_one:hover,
-#ordinal_max:hover {
+#ordinal_plus_one:hover {
     background: #ffe680;
 }
 
-#ordinal_plus_one:active,
-#ordinal_max:active {
+#ordinal_plus_one:active {
     background: #ffd84d;
 }
 

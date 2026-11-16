@@ -341,54 +341,62 @@ window.addEventListener("DOMContentLoaded", () => {
 // ---------------------------------------------------------------------------
 // The "+1" button next to the input ordinal.
 //
-// It walks the standard ω-Y sequences in increasing order, always starting at
-// 1,1 and never going past 1,3:
-//   · while the sequence is shorter than the +1 maximum terms, append a 1
-//   · once it hits that length, add 1 to the last term; if the result isn't a
-//     standard sequence, drop that term and carry the +1 to the new last term,
-//     repeating until some term change gives a standard sequence
-//   · 1,3 is the ceiling: the press after it wraps back to 1,1
-// So with a limit of 5 terms it goes
-//   1,1 → 1,1,1 → 1,1,1,1 → 1,1,1,1,1 → 1,2
-// (1,1,1,1,2 / 1,1,1,2 / 1,1,2 are all non-standard, 1,2 is the first hit).
+// Each press takes the successor (+1, i.e. appending ",1") of the current
+// standard ω-Y sequence and automatically maximizes it whenever either:
+//   · a fundamental-sequence step from 1,3 reaches the configured base, OR
+//   · the sequence exceeds the configured maximum number of ω-Y terms.
 //
-// The "Max" button does the same presses, but keeps pressing by itself until the
-// sequence has as many terms as the limit allows, so it lands on the next full
-// sequence: with 5 terms 1,1,1,1,1 → 1,2,1,1,1 → 1,2,1,2,1 → 1,2,1,2,2 → …
+// 1,3 is the ceiling: the press after 1,3 wraps back to 1,1.
+//
+// For example, with base 3 and 10 terms:
+//   1,1 → 1,1,1 → 1,1,1,1 → 1,2 → 1,2,1 → … → 1,2,1,1,1,1 → 1,2,1,2 → …
+// And with base 10 and 5 terms:
+//   1,1 → 1,1,1 → 1,1,1,1 → 1,1,1,1,1 → 1,2 → … → 1,2,1,1,1 → 1,2,1,2 → …
 //
 // The sequence the button left behind (already saved as the searched input) and
-// the number of clicks that got there are also kept, so after leaving the page
-// and coming back the button carries on from where it was instead of jumping
-// back to 1,1. Only a changed term limit starts the walk over.
+// the number of clicks that got there are kept across reloads. Changing either
+// the maximum number of terms or the base resets the click counter and starts
+// the walk over at 1,1.
 // ---------------------------------------------------------------------------
 
-//the highest sequence the button ever reaches
+//the highest sequence the button ever reaches (also the Limit ceiling for maximization)
 const ORDINAL_WALK_CAP = [1, 3]
+const ORDINAL_WALK_CAP_STR = "1,3"
 
-//the term limit the walk currently runs with, so a change restarts it at 1,1
+//the term limit and base the walk currently runs with, so a change restarts it at 1,1
 var ordinal_walk_max = null
+var ordinal_walk_base = null
 
-//set when the maximum terms changed: the next press then starts over at 1,1
+//set when the maximum terms or base changed: the next press then starts over at 1,1
 //instead of continuing the sequence that is already in the box
 var ordinal_walk_restart = false
 
 //How many times "+1" was pressed to reach the sequence that is saved: it counts
 //from 0 whenever the walk (re)starts at 1,1, is kept when you leave and come
-//back, and goes back to 0 when the maximum number of terms changes.
+//back, and goes back to 0 when the maximum number of terms or base changes.
 var clicks = 0
 
 //where `clicks` and the sequence it belongs to are kept between visits
 const ORDINAL_WALK_SAVE_KEY = "lngi_ordinal_walk"
 
-//The +1 walk's own term limit. Values below 2 use a minimum of 2 terms,
-//since the walk starts at 1,1.
+//The +1 walk's own term limit (pathmaxlength). Values below 2 use a minimum of
+//2 terms, since the walk starts at 1,1.
 function ordinal_walk_limit() {
     const el = document.getElementById("ordinal_walk_max_terms")
     const n = el ? Number(el.value) : 2
     return isFinite(n) ? Math.max(2, Math.floor(n)) : 2
 }
 
-//show the counter next to the term limit (it is only a readout of `clicks`)
+//The +1 walk's base for automatic maximization. Values below 2 clamp to 2;
+//blank or missing defaults to 3.
+function ordinal_walk_base_limit() {
+    const el = document.getElementById("ordinal_walk_base")
+    const raw = el ? String(el.value ?? "").trim() : ""
+    const n = raw === "" ? 3 : Number(raw)
+    return isFinite(n) ? Math.max(2, Math.floor(n)) : 3
+}
+
+//show the counter next to the walk settings (it is only a readout of `clicks`)
 function ordinal_walk_show_clicks() {
     const el = document.getElementById("ordinal_walk_clicks")
     if (el) el.textContent = `clicks: ${clicks}`
@@ -402,14 +410,15 @@ function ordinal_walk_save() {
         localStorage.setItem(ORDINAL_WALK_SAVE_KEY, JSON.stringify({
             input: String(input ? input.value : "").trim(),
             clicks: clicks,
-            max: ordinal_walk_limit()
+            max: ordinal_walk_limit(),
+            base: ordinal_walk_base_limit()
         }))
     } catch (e) {
         console.log("could not save the +1 walk state", e)
     }
 }
 
-//count `n` more clicks (Max counts every inner press), show it and save it
+//count `n` more clicks, show it and save it
 function ordinal_walk_add_click(n = 1) {
     clicks += n
     ordinal_walk_show_clicks()
@@ -461,25 +470,128 @@ function ordinal_walk_standard(l) {
     }
 }
 
-//the sequence after `seq`, following the +1 rules above
-function ordinal_walk_next(seq, max) {
-    //still room for another term: appending 1 always keeps a sequence standard
-    if (seq.length < max) {
-        const grown = seq.concat([1])
-        return ordinal_walk_le(grown, ORDINAL_WALK_CAP) ? grown : [1, 1]
+//Descend from the 1,3 ceiling via Y_Sequence.fs and return `currentordinal`
+//as soon as a fundamental-sequence step reaches `base`.
+//Uses the exact property that Y_Sequence.fs(s, 0) decrements a >1 last term
+//or pops a trailing 1, so consecutive step=0 moves collapse cleanly in O(1).
+function maximizeordinal_base(ord, base) {
+    if (base <= 0) return ORDINAL_WALK_CAP_STR
+    if (Y_Sequence.cmp(ord, ORDINAL_WALK_CAP_STR) >= 0) return ORDINAL_WALK_CAP_STR
+
+    const ordArr = ord.split(",").map(Number)
+    let currentordinal = ORDINAL_WALK_CAP_STR
+    let guard = 0
+
+    while (Y_Sequence.cmp(ord, currentordinal) < 0 && guard < 10000) {
+        guard++
+        const curArr = currentordinal.split(",").map(Number)
+        const L = curArr.length
+        const v = curArr[L - 1]
+
+        //step = 0 is always < base (since base >= 1): fast-skip consecutive step=0 moves
+        if (v <= 1) {
+            currentordinal = curArr.slice(0, -1).join(",")
+            continue
+        }
+
+        let prefixCmp = 0
+        const minPre = Math.min(ordArr.length, L - 1)
+        for (let i = 0; i < minPre; i++) {
+            if (ordArr[i] < curArr[i]) { prefixCmp = -1; break }
+            if (ordArr[i] > curArr[i]) { prefixCmp = 1; break }
+        }
+        if (prefixCmp === 0 && ordArr.length < L - 1) prefixCmp = -1
+
+        if (prefixCmp < 0) {
+            currentordinal = curArr.slice(0, -1).join(",")
+            continue
+        }
+        if (prefixCmp === 0) {
+            if (ordArr.length === L - 1) {
+                currentordinal = curArr.slice(0, -1).join(",")
+                continue
+            }
+            if (ordArr.length === L && ordArr[L - 1] < v) {
+                currentordinal = ord
+                continue
+            }
+            if (ordArr.length > L && ordArr[L - 1] < v - 1) {
+                curArr[L - 1] = ordArr[L - 1] + 1
+                currentordinal = curArr.join(",")
+                continue
+            }
+        }
+
+        //fs(currentordinal, 0) < ord, so find the smallest 1 <= n < base with fs >= ord
+        let step = base
+        let nextOrd = null
+        for (let n = 1; n < base; n++) {
+            const x = Y_Sequence.fs(currentordinal, n)
+            if (Y_Sequence.cmp(x, ord) >= 0) {
+                step = n
+                nextOrd = x
+                break
+            }
+        }
+
+        if (step >= base) {
+            return currentordinal
+        }
+
+        currentordinal = nextOrd
     }
 
-    //no room left: try to raise the last term, carrying left while it's invalid
-    var carry = seq.slice()
+    return currentordinal
+}
+
+//Smallest standard ω-Y sequence >= `seq` (capped at 1,3) with at most `maxTerms` terms.
+function maximizeordinal_terms(seq, maxTerms) {
+    if (seq.length <= maxTerms) return seq
+    var carry = seq.slice(0, maxTerms)
     while (carry.length >= 2) {
         const raised = carry.slice()
         raised[raised.length - 1]++
-        if (raised.length <= max && ordinal_walk_le(raised, ORDINAL_WALK_CAP) && ordinal_walk_standard(raised)) return raised
+        if (ordinal_walk_le(raised, ORDINAL_WALK_CAP) && ordinal_walk_standard(raised)) {
+            return raised
+        }
         carry.pop()
     }
+    return ORDINAL_WALK_CAP.slice()
+}
 
-    //nothing below the cap is left (we were at 1,3): start over
-    return [1, 1]
+//Maximize `ord` upward until it satisfies both the `base` limit and the
+//`pathmaxlength` (maximum ω-Y terms) limit, staying at or below 1,3.
+function maximizeordinal(ord, base = ordinal_walk_base_limit(), pathmaxlength = ordinal_walk_limit()) {
+    let cur = Array.isArray(ord) ? ord.join(",") : String(ord).trim()
+    if (!cur || Y_Sequence.cmp(cur, ORDINAL_WALK_CAP_STR) >= 0) return ORDINAL_WALK_CAP_STR
+
+    const maxTerms = Math.max(2, Math.floor(Number(pathmaxlength) || 2))
+    const effBase = Math.max(1, Math.floor(Number(base) || 2))
+
+    for (let iter = 0; iter < 64; iter++) {
+        let arr = cur.split(",").map(Number)
+        let next = arr.length > maxTerms ? maximizeordinal_terms(arr, maxTerms).join(",") : cur
+        next = maximizeordinal_base(next, effBase)
+        let nextArr = next.split(",").map(Number)
+        if (nextArr.length > maxTerms) {
+            next = maximizeordinal_terms(nextArr, maxTerms).join(",")
+        }
+        if (next === cur) return cur
+        cur = next
+    }
+
+    return cur
+}
+
+//the sequence after `seq`: take the successor (+1, appending 1) and
+//automatically maximize if either the base limit or terms limit is reached.
+//After 1,3, wrap back to 1,1.
+function ordinal_walk_next(seq, max = ordinal_walk_limit(), base = ordinal_walk_base_limit()) {
+    if (Y_Sequence.cmp(seq, ORDINAL_WALK_CAP) >= 0) {
+        return [1, 1]
+    }
+    const succ = seq.concat([1])
+    return maximizeordinal(succ, base, max).split(",").map(Number)
 }
 
 //what the input currently holds, or null when it isn't a sequence the walk can
@@ -492,50 +604,24 @@ function ordinal_walk_current() {
     return ordinal_walk_standard(l) ? l : null
 }
 
-//One press of the walk, shared by "+1" and "Max".
-//With `maximize` the press keeps going by itself until the sequence fills the
-//term limit, walking up again after a step that drops terms (1,1,1,1,1 → 1,2).
-//Every step it takes counts as a click, so Max counts exactly like pressing +1
-//that many times.
-function ordinal_walk_press(maximize) {
+//the "+1" button: take the successor and auto-maximize under the current
+//maximum terms and base settings.
+function ordinal_plus_one() {
     const input = document.getElementById("search_input")
     const max = ordinal_walk_limit()
+    const base = ordinal_walk_base_limit()
     //Continue from the sequence that is in the box (restored, typed or walked),
-    //unless a changed term limit already asks for a fresh start.
-    let current = ordinal_walk_restart ? null : ordinal_walk_current()
-    //a sequence with more terms than the walk allows can't be continued either
-    if (current && current.length > max) current = null
-
-    //a changed term limit restarts the walk, and so does anything we can't continue from
-    let next = current ? ordinal_walk_next(current, max) : [1, 1]
-    let pressed = 1
-
-    if (maximize) {
-        //a short sequence grows one term per press, so this settles quickly; the
-        //bound only guards against a step that restarts the walk at 1,1
-        const guard = 2 * max + 8
-        while (next.length < max && pressed < guard) {
-            next = ordinal_walk_next(next, max)
-            pressed++
-        }
-    }
+    //unless a changed term limit or base already asks for a fresh start.
+    const current = ordinal_walk_restart ? null : ordinal_walk_current()
+    const next = current ? ordinal_walk_next(current, max, base) : [1, 1]
 
     ordinal_walk_max = max
+    ordinal_walk_base = base
     ordinal_walk_restart = false
     input.value = next.join(",")
     //same path as typing it: refreshes the result, the analysis part and the saved input
     search_time()
-    ordinal_walk_add_click(pressed)
-}
-
-//the "+1" button: one step of the walk
-function ordinal_plus_one() {
-    ordinal_walk_press(false)
-}
-
-//the "Max" button: as many steps as it takes to fill the term limit
-function ordinal_max() {
-    ordinal_walk_press(true)
+    ordinal_walk_add_click(1)
 }
 
 //brought back after a reload: the saved sequence is continued instead of being
@@ -544,6 +630,7 @@ function ordinal_walk_restore() {
     const input = document.getElementById("search_input")
     const saved_input = String(input ? input.value : "").trim()
     const max = ordinal_walk_limit()
+    const base = ordinal_walk_base_limit()
 
     clicks = 0
 
@@ -554,15 +641,16 @@ function ordinal_walk_restore() {
         saved = null
     }
 
-    //the count only belongs to this sequence seen under this term limit
+    //the count only belongs to this sequence seen under this term limit and base
     if (saved && typeof saved.clicks == "number" && isFinite(saved.clicks) && saved.clicks >= 0 &&
-        String(saved.input ?? "").trim() === saved_input && saved.max === max) {
+        String(saved.input ?? "").trim() === saved_input && saved.max === max && saved.base === base) {
         clicks = Math.floor(saved.clicks)
     }
 
-    //nothing forces a restart: pressing +1 or Max continues the restored
-    //sequence instead of starting over at 1,1
+    //nothing forces a restart: pressing +1 continues the restored sequence
+    //instead of starting over at 1,1
     ordinal_walk_max = max
+    ordinal_walk_base = base
     ordinal_walk_restart = false
 
     ordinal_walk_show_clicks()
@@ -574,6 +662,7 @@ const searchInputEl = document.getElementById("search_input")
 if (searchInputEl) searchInputEl.addEventListener("input", () => {
     clicks = 0
     ordinal_walk_max = ordinal_walk_limit()
+    ordinal_walk_base = ordinal_walk_base_limit()
     ordinal_walk_restart = false
     ordinal_walk_show_clicks()
     ordinal_walk_save()
@@ -584,10 +673,22 @@ const ordinalWalkLimitEl = document.getElementById("ordinal_walk_max_terms")
 if (ordinalWalkLimitEl) ordinalWalkLimitEl.addEventListener("input", () => {
     const max = ordinal_walk_limit()
     //typing something the walk can't use (1, or nothing) isn't a real change
-    ordinal_walk_restart = max !== ordinal_walk_max
-    if (!ordinal_walk_restart) return
+    if (max === ordinal_walk_max) return
+    ordinal_walk_restart = true
     clicks = 0
     ordinal_walk_max = max
+    ordinal_walk_show_clicks()
+    ordinal_walk_save()
+})
+
+//a new base restarts the walk at 1,1, so the count starts over
+const ordinalWalkBaseEl = document.getElementById("ordinal_walk_base")
+if (ordinalWalkBaseEl) ordinalWalkBaseEl.addEventListener("input", () => {
+    const base = ordinal_walk_base_limit()
+    if (base === ordinal_walk_base) return
+    ordinal_walk_restart = true
+    clicks = 0
+    ordinal_walk_base = base
     ordinal_walk_show_clicks()
     ordinal_walk_save()
 })
