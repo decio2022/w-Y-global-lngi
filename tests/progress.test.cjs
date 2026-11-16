@@ -148,9 +148,16 @@ test('+1 takes successor and auto-maximizes on base limit or terms limit', () =>
         steps++;
     }
     assert.equal(prev, '1,3');
-    assert.equal(steps, 78);
+    assert.equal(steps, 21);
     run('ordinal_plus_one()');
     assert.equal(element('search_input').value, '1,1');
+
+    // Reaching ω^4 (1,2,2,2,2) via +1 at base=3 automatically updates to ω^ω (1,2,3)
+    element('ordinal_walk_max_terms').value = '10';
+    element('ordinal_walk_base').value = '3';
+    search('1,2,2,2,1,2,2,2,1,2');
+    run('ordinal_plus_one()');
+    assert.equal(element('search_input').value, '1,2,3');
 
     // Terms limit reached before base limit: base=10, max=5
     element('ordinal_walk_max_terms').value = '5';
@@ -172,9 +179,21 @@ test('maximizeordinal handles direct calls, base changes reset clicks, and UI ha
     assert.equal(run(`maximizeordinal('1,1,1,1', 3, 10)`), '1,2');
     assert.equal(run(`maximizeordinal('1,2,1,2,1,2,1,1,1', 3, 10)`), '1,2,1,2,1,2,1,1,1');
     assert.equal(run(`maximizeordinal('1,2,1,2,1,2,1,1,1,1', 3, 10)`), '1,2,2');
-    assert.equal(run(`maximizeordinal('1,2,4,8,16', 3, 10)`), '1,3');
+    // Higher limit ordinals at base=3: ω^4 -> ω^ω, ω^(ω4) -> ω^(ω^2), ω^(ω^4) -> ω^(ω^ω), ω^^4 -> ε_0
+    assert.equal(run(`maximizeordinal('1,2,2,2', 3, 10)`), '1,2,2,2');
+    assert.equal(run(`maximizeordinal('1,2,2,2,2', 3, 10)`), '1,2,3');
+    assert.equal(run(`maximizeordinal('1,2,3,2,3,2,3,2,3', 3, 10)`), '1,2,3,3');
+    assert.equal(run(`maximizeordinal('1,2,3,3,3,3', 3, 10)`), '1,2,3,4');
+    assert.equal(run(`maximizeordinal('1,2,3,4', 3, 10)`), '1,2,3,4');
+    assert.equal(run(`maximizeordinal('1,2,3,4,5', 3, 10)`), '1,2,4');
+    assert.equal(run(`maximizeordinal('1,2,4,8', 3, 10)`), '1,3');
+    // Base=2 and base=4 thresholds on ω^k -> ω^ω
+    assert.equal(run(`maximizeordinal('1,2,2,2', 2, 10)`), '1,2,3');
+    assert.equal(run(`maximizeordinal('1,2,3', 2, 10)`), '1,2,3');
+    assert.equal(run(`maximizeordinal('1,2,2,2,2', 4, 10)`), '1,2,2,2,2');
+    assert.equal(run(`maximizeordinal('1,2,2,2,2,2', 4, 10)`), '1,2,3');
+    // Terms limit
     assert.equal(run(`maximizeordinal('1,2,1,1,1,1', 10, 5)`), '1,2,1,2');
-    assert.equal(run(`maximizeordinal('1,2,2,2,2', 2, 10)`), '1,2,3');
 
     // Changing base resets clicks and restarts the walk at 1,1 on next +1
     element('ordinal_walk_max_terms').value = '10';

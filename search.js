@@ -472,16 +472,20 @@ function ordinal_walk_standard(l) {
 }
 
 //Canonical fundamental-sequence term of a ω-Y sequence for base maximization.
-//Y_Sequence.fs leaves the decremented trailing "1" on limit sequences whose
-//last term is 2 (e.g. fs("1,2", 2) = "1,1,1,1" = 4 instead of 3, and
-//fs("1,2,2", 2) = "1,2,1,2,1,2,1" = ω3+1 instead of ω3). Popping that
-//trailing "1" gives the canonical FS terms:
-//  ω[0..3] = 1, 2, 3, 4   and   ω^2[0..3] = ω, ω2, ω3, ω4.
+//Y_Sequence.fs always leaves the decremented final column at the end of every
+//limit expansion (e.g. fs("1,2", 2) = "1,1,1,1" = 4 instead of 3,
+//fs("1,2,2", 2) = "1,2,1,2,1,2,1" = ω3+1 instead of ω3, and
+//fs("1,2,3", 3) = "1,2,2,2,2,2" = ω^5 instead of ω^4). Dropping that extra
+//final term on every limit sequence yields the canonical FS terms:
+//  ω[0..3] = 1, 2, 3, 4
+//  ω^2[0..3] = ω, ω2, ω3, ω4
+//  ω^ω[0..3] = ω, ω^2, ω^3, ω^4
+//  ε_0[0..3] = ω, ω^ω, ω^(ω^ω), ω^^4
 function ordinal_walk_fs(seq, n) {
     const raw = Y_Sequence.fs(seq, n)
     if (!Y_Sequence.isSuccessor(seq)) {
         const parts = raw.split(",")
-        if (parts.length > 1 && parts[parts.length - 1] === "1") {
+        if (parts.length > 1) {
             return parts.slice(0, -1).join(",")
         }
     }
@@ -492,10 +496,13 @@ function ordinal_walk_fs(seq, n) {
 //return `currentordinal` once `ord` reaches its `base`-th FS term
 //(`ord >= ordinal_walk_fs(currentordinal, base)`).
 //For example, at base 3:
-//  ω[3] = 4 (1,1,1,1) → 1,1,1 (3) stays 3; 1,1,1,1 (4) maximizes to ω (1,2).
-//  ω^2[3] = ω4 (1,2,1,2,1,2,1,2) → ω3+1, ω3+2, ω3+3 descend cleanly into ω4;
-//  ω3+4 maximizes to ω4 and then to ω^2 (1,2,2).
-//Consecutive step=0 moves collapse cleanly in O(1).
+//  ω[3] = 4 (1,1,1,1) → 3 stays 3; 4 maximizes to ω (1,2).
+//  ω^2[3] = ω4 → ω3+1, ω3+2, ω3+3 stay; ω3+4 maximizes to ω^2 (1,2,2).
+//  ω^ω[3] = ω^4 (1,2,2,2,2) → ω^3 stays; ω^4 maximizes to ω^ω (1,2,3).
+//  ε_0[3] = ω^^4 (1,2,3,4,5) → ω^^3 stays; ω^^4 maximizes to ε_0 (1,2,4).
+//Uses the exact properties that ordinal_walk_fs([pre, v], 0) === [pre] and
+//ordinal_walk_fs([pre, v], 1) always starts with [pre, v - 1] to fast-skip
+//exact n=0 and (for base >= 2) n=1 descent chains in O(1).
 function maximizeordinal_base(ord, base) {
     if (base <= 0) return ORDINAL_WALK_CAP_STR
     if (Y_Sequence.cmp(ord, ORDINAL_WALK_CAP_STR) >= 0) return ORDINAL_WALK_CAP_STR
@@ -516,41 +523,52 @@ function maximizeordinal_base(ord, base) {
             continue
         }
 
-        //fast-skip consecutive n=0 steps where ordinal_walk_fs(currentordinal, 0) >= ord
-        //(for v === 2, fs(cur, 0) = cur[0..L-2]; for v >= 3, fs(cur, 0) = [...cur[0..L-2], v-1])
-        let prefixCmp = 0
-        const minPre = Math.min(ordArr.length, L - 1)
+        //check n=0: ordinal_walk_fs(currentordinal, 0) === curArr[0..L-2]
+        let cmp0 = 0
+        const minPre = Math.min(L - 1, ordArr.length)
         for (let i = 0; i < minPre; i++) {
-            if (ordArr[i] < curArr[i]) { prefixCmp = -1; break }
-            if (ordArr[i] > curArr[i]) { prefixCmp = 1; break }
+            if (curArr[i] < ordArr[i]) { cmp0 = -1; break }
+            if (curArr[i] > ordArr[i]) { cmp0 = 1; break }
         }
-        if (prefixCmp === 0 && ordArr.length < L - 1) prefixCmp = -1
+        if (cmp0 === 0) {
+            if (L - 1 < ordArr.length) cmp0 = -1
+            else if (L - 1 > ordArr.length) cmp0 = 1
+        }
 
-        if (prefixCmp < 0) {
-            currentordinal = curArr.slice(0, -1).join(",")
+        //when curArr[0..L-2] >= ord, collapse consecutive n=0 pops
+        if (cmp0 >= 0) {
+            let popTo = L - 1
+            while (popTo > 1) {
+                let c = 0
+                const ml = Math.min(popTo - 1, ordArr.length)
+                for (let i = 0; i < ml; i++) {
+                    if (curArr[i] < ordArr[i]) { c = -1; break }
+                    if (curArr[i] > ordArr[i]) { c = 1; break }
+                }
+                if (c === 0) {
+                    if (popTo - 1 < ordArr.length) c = -1
+                    else if (popTo - 1 > ordArr.length) c = 1
+                }
+                if (c >= 0) popTo--
+                else break
+            }
+            currentordinal = curArr.slice(0, popTo).join(",")
             continue
         }
-        if (prefixCmp === 0) {
-            if (ordArr.length === L - 1) {
-                currentordinal = curArr.slice(0, -1).join(",")
+
+        //now curArr[0..L-2] < ord < curArr[0..L-1], so ord shares prefix
+        //curArr[0..L-2], has length >= L, and satisfies ordArr[L-1] < v.
+        //For base >= 2, ordinal_walk_fs([pre, k], 1) always begins with
+        //[pre, k - 1], so n=1 (< base) + n=0 pops collapse straight down:
+        if (base >= 2) {
+            if (ordArr.length === L) {
+                currentordinal = ord
                 continue
             }
-            if (v >= 3) {
-                if (ordArr.length === L && ordArr[L - 1] < v) {
-                    if (ordArr[L - 1] === 1) {
-                        //fs([pre, 2], 0) = [pre] < [pre, 1], so stop at [pre, 2] to test n=1..base
-                        curArr[L - 1] = 2
-                        currentordinal = curArr.join(",")
-                        continue
-                    }
-                    currentordinal = ord
-                    continue
-                }
-                if (ordArr.length > L && ordArr[L - 1] < v - 1) {
-                    curArr[L - 1] = Math.max(2, ordArr[L - 1] + 1)
-                    currentordinal = curArr.join(",")
-                    continue
-                }
+            if (ordArr[L - 1] < v - 1) {
+                curArr[L - 1] = ordArr[L - 1] + 1
+                currentordinal = curArr.join(",")
+                continue
             }
         }
 
