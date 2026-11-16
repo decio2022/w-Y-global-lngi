@@ -159,6 +159,13 @@ test('+1 takes successor and auto-maximizes on base limit or terms limit', () =>
     run('ordinal_plus_one()');
     assert.equal(element('search_input').value, '1,2,3');
 
+    // Reaching ω^ω^ω^ω^(ε_0+1) via +1 at base=3 automatically updates to ε_1 (1,2,4,4)
+    element('ordinal_walk_max_terms').value = '10';
+    element('ordinal_walk_base').value = '3';
+    search('1,2,4,3,5,4,6,4,6,4');
+    run('ordinal_plus_one()');
+    assert.equal(element('search_input').value, '1,2,4,4');
+
     // Terms limit reached before base limit: base=10, max=5
     element('ordinal_walk_max_terms').value = '5';
     element('ordinal_walk_base').value = '10';
@@ -186,6 +193,22 @@ test('maximizeordinal handles direct calls, base changes reset clicks, and UI ha
     assert.equal(run(`maximizeordinal('1,2,3,3,3,3', 3, 10)`), '1,2,3,4');
     assert.equal(run(`maximizeordinal('1,2,3,4', 3, 10)`), '1,2,3,4');
     assert.equal(run(`maximizeordinal('1,2,3,4,5', 3, 10)`), '1,2,4');
+    // ε_{α+1} and skipped-tower limits: at base=3, height-3 towers stay while
+    // height-4 towers ω^ω^ω^ω^(α+1) maximize directly to ε_{α+1} (matching ω^^4 -> ε_0)
+    assert.equal(run(`maximizeordinal('1,2,4,3,5,4', 3, 10)`), '1,2,4,3,5,4');
+    assert.equal(run(`maximizeordinal('1,2,4,3,5,4,6', 3, 10)`), '1,2,4,3,5,4,6');
+    assert.equal(run(`maximizeordinal('1,2,4,3,5,4,6,5', 3, 10)`), '1,2,4,4');
+    assert.equal(run(`maximizeordinal('1,2,4,3,5,4,6,5,7', 3, 10)`), '1,2,4,4');
+    assert.equal(run(`maximizeordinal('1,2,4,3,5,4,6,5', 4, 15)`), '1,2,4,3,5,4,6,5');
+    assert.equal(run(`maximizeordinal('1,2,4,3,5,4,6,5,7,6', 4, 15)`), '1,2,4,4');
+    assert.equal(run(`maximizeordinal('1,2,4,4,3,5,5,4,6,6,5', 3, 15)`), '1,2,4,4,4');
+    assert.equal(run(`maximizeordinal('1,2,4,5,3,5,6,4,6,7,5', 3, 15)`), '1,2,4,5,4');
+    assert.equal(run(`maximizeordinal('1,2,4,6,3,5,7,4,6,8,5', 3, 15)`), '1,2,4,6,4');
+    assert.equal(run(`maximizeordinal('1,2,4,5,7,6,8,7,9,8', 3, 15)`), '1,2,4,5,7,7');
+    assert.equal(run(`maximizeordinal('1,2,4,4,1,2,4,3,5,4,6,5', 3, 15)`), '1,2,4,4,1,2,4,4');
+    // Higher power-of-2 skipped tower: ψ(Ω_ω + Ω_4) stays at base=4, ψ(Ω_ω + Ω_5) -> ψ(Ω_ω*2)
+    assert.equal(run(`maximizeordinal('1,2,4,8,7,12,11,17,16', 4, 15)`), '1,2,4,8,7,12,11,17,16');
+    assert.equal(run(`maximizeordinal('1,2,4,8,7,12,11,17,16,23,22', 4, 15)`), '1,2,4,8,8');
     assert.equal(run(`maximizeordinal('1,2,4,8', 3, 10)`), '1,3');
     // Base=2 and base=4 thresholds on ω^k -> ω^ω
     assert.equal(run(`maximizeordinal('1,2,2,2', 2, 10)`), '1,2,3');

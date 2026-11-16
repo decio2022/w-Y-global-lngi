@@ -471,25 +471,95 @@ function ordinal_walk_standard(l) {
     }
 }
 
+//Detect ω-Y limit sequences whose Y_Sequence.fs skips height 1 by decrementing
+//straight into a height-2 tower (e.g. ε_1 = 1,2,4,4 has raw fs(0) = 1,2,4,3 =
+//ω^ω^(ε_0+1), and generally every ε_{α+1} = 1,2,4,4 / 1,2,4,4,4 / 1,2,4,5,4 /
+//1,2,4,6,4 / 1,2,4,5,7,7, as well as higher power-of-2 towers like 1,2,4,8,8).
+//In the 1-Y difference mountain (< 1,3), these are precisely the limit
+//sequences whose final column has a descending power-of-2 difference chain
+//[2^k, ..., 2, 1] of height >= 3 (k >= 1), bad-part length >= 2, and a fresh
+//ascent at the bad root b (a[b - 1] < a[b]).
+function ordinal_walk_is_skipped_tower(seq) {
+    const a = seq.split(",").map(Number)
+    if (a.length < 4 || a[a.length - 1] < 4) return false
+
+    let cur = a.map(v => ({ v, p: -1 }))
+    const col = [a[a.length - 1]]
+    let prevRow = null
+
+    while (true) {
+        const next = new Array(cur.length)
+        let any = false
+        for (let i = 0; i < cur.length; i++) {
+            if (cur[i].v <= 1) {
+                next[i] = { v: 0, p: -1 }
+                continue
+            }
+            let p = -1
+            for (let j = i - 1; j >= 0; j--) {
+                if (cur[j].v > 0 && cur[j].v < cur[i].v) {
+                    if (!prevRow) {
+                        p = j
+                        break
+                    }
+                    let anc = cur[i].p
+                    while (anc !== -1 && anc > j) anc = prevRow[anc].p
+                    if (anc === j) {
+                        p = j
+                        break
+                    }
+                }
+            }
+            if (p === -1) {
+                next[i] = { v: 0, p: -1 }
+            } else {
+                next[i] = { v: cur[i].v - cur[p].v, p }
+                any = true
+            }
+        }
+        if (!any || next[next.length - 1].v === 0) break
+        col.push(next[next.length - 1].v)
+        prevRow = cur
+        cur = next
+    }
+
+    if (col.length < 3 || col[col.length - 1] !== 1) return false
+    for (let i = col.length - 2; i >= 1; i--) {
+        if (col[i] !== col[i + 1] * 2) return false
+    }
+
+    const b = prevRow[prevRow.length - 1].p
+    if (b <= 0 || a.length - 1 - b < 2) return false
+    return a[b - 1] < a[b]
+}
+
 //Canonical fundamental-sequence term of a ω-Y sequence for base maximization.
 //Y_Sequence.fs always leaves the decremented final column at the end of every
 //limit expansion (e.g. fs("1,2", 2) = "1,1,1,1" = 4 instead of 3,
 //fs("1,2,2", 2) = "1,2,1,2,1,2,1" = ω3+1 instead of ω3, and
 //fs("1,2,3", 3) = "1,2,2,2,2,2" = ω^5 instead of ω^4). Dropping that extra
-//final term on every limit sequence yields the canonical FS terms:
+//final term on limit sequences yields the canonical FS terms:
 //  ω[0..3] = 1, 2, 3, 4
 //  ω^2[0..3] = ω, ω2, ω3, ω4
 //  ω^ω[0..3] = ω, ω^2, ω^3, ω^4
 //  ε_0[0..3] = ω, ω^ω, ω^(ω^ω), ω^^4
+//For skipped-tower limits such as ε_1 (1,2,4,4), raw Y_Sequence.fs(seq, n - 1)
+//already gives the canonical height-(n+1) tower (e.g. ε_1[1..3] = ω^ω^(ε_0+1),
+//ω^ω^ω^(ε_0+1), ω^ω^ω^ω^(ε_0+1)), matching ε_0[n] = ω^^(n+1) so that
+//ω^ω^ω^ω^(ε_0+1) maximizes directly to ε_1 at base 3.
 function ordinal_walk_fs(seq, n) {
-    const raw = Y_Sequence.fs(seq, n)
     if (!Y_Sequence.isSuccessor(seq)) {
-        const parts = raw.split(",")
-        if (parts.length > 1) {
-            return parts.slice(0, -1).join(",")
+        if (n <= 0) {
+            const idx = seq.lastIndexOf(",")
+            if (idx !== -1) return seq.slice(0, idx)
+        } else if (ordinal_walk_is_skipped_tower(seq)) {
+            return Y_Sequence.fs(seq, n - 1)
         }
+        const raw = Y_Sequence.fs(seq, n)
+        const idx = raw.lastIndexOf(",")
+        return idx !== -1 ? raw.slice(0, idx) : raw
     }
-    return raw
+    return Y_Sequence.fs(seq, n)
 }
 
 //Descend from the 1,3 ceiling via canonical ω-Y fundamental sequences and
