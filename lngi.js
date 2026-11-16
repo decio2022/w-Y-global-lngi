@@ -108,7 +108,9 @@ function update_search_progress() {
         const el = document.getElementById(id)
         return [el.value, el.checked]
     })
-    const key = JSON.stringify([sequence, value, maxTerms, scratch_bar_display, page, notationSettings])
+    //the inverse input part of the Analyzer tab can be the one being followed
+    const fromInverse = typeof search_active == "string" && search_active == "down"
+    const key = JSON.stringify([sequence, value, maxTerms, scratch_bar_display, page, notationSettings, fromInverse])
     if (key === progress_render_key) return
     progress_render_key = key
 
@@ -120,7 +122,7 @@ function update_search_progress() {
     mainBar.parentElement.setAttribute("aria-label", mainBar.textContent)
     document.getElementById("main_lngi_Content").textContent = sequence
     document.getElementById("search_progress_source").textContent =
-        `${sequence}${searched_ordinal ? "" : " (default: no valid search)"}; Max ω-Y Terms: ${maxTerms || "unlimited"}`
+        `${sequence}${searched_ordinal ? "" : " (default: no valid search)"}${fromInverse ? " (inverse input)" : ""}; Max ω-Y Terms: ${maxTerms || "unlimited"}`
 
     for (let i = 0; i < 53; i++) {
         const el = document.getElementById(`bar_${i}`)
@@ -347,6 +349,11 @@ function update() {
     const search_input_el = document.getElementById("search_input")
     if (search_input_el && typeof search_time == "function" && search_input_el.value != last_search_input) {
         search_time()
+    }
+    //same for the inverse input part below it
+    const inverse_input_el = document.getElementById("inverse_input")
+    if (inverse_input_el && typeof inverse_search_time == "function" && inverse_input_el.value != last_inverse_input) {
+        inverse_search_time()
     }
     update_search_progress()
     if (page == 3 && sync_mountain.checked) { document.getElementById("input").value = trimStringList(num_to_lngi(get_time(Math.max(0, simulatedTime - st)))[0], MaxYTerms.valueAsNumber) }

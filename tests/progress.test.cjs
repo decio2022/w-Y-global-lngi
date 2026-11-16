@@ -82,3 +82,101 @@ test('invalid input falls back safely and later milestones cannot overfill the c
     assert.equal(element('main_lngi_bar').style.width, '100%');
     assert.ok(Array.from({ length: 53 }, (_, i) => element(`bar_${i}`).hidden).every(Boolean));
 });
+
+// ---- the inverse input part: −1 walks the +1 sequences backwards ----
+
+// every sequence +1 visits under a term limit, from 1,1 up to 1,3
+function walk_up(max) {
+    return JSON.parse(run(`(() => {
+        const chain = []
+        let seq = [1, 1]
+        do { chain.push(seq.join(",")); seq = ordinal_walk_next(seq, ${max}) } while (seq.join(",") != "1,1")
+        return JSON.stringify(chain)
+    })()`));
+}
+
+test('-1 is the exact reverse of +1 for every amount of terms', () => {
+    for (const max of [2, 3, 4, 5, 6]) {
+        const up = walk_up(max);
+        assert.equal(up[0], '1,1');
+        assert.equal(up.at(-1), '1,3');
+        const down = JSON.parse(run(`(() => {
+            const chain = []
+            let seq = [1, 3]
+            do { chain.push(seq.join(",")); seq = ordinal_walk_prev(seq, ${max}) } while (seq.join(",") != "1,3")
+            return JSON.stringify(chain)
+        })()`));
+        assert.deepEqual(down, up.slice().reverse(), `term limit ${max}`);
+    }
+    assert.deepEqual(walk_up(3).reverse(), ['1,3', '1,2,4', '1,2,3', '1,2,2', '1,2,1', '1,2', '1,1,1', '1,1']);
+});
+
+test('-1 undoes +1 under bigger term limits too', () => {
+    for (const max of [8, 10, 20, 40, 53]) {
+        const result = JSON.parse(run(`(() => {
+            let seq = [1, 3], undone = true, falling = true, full = true
+            for (let i = 0; i < 12; i++) {
+                const lower = ordinal_walk_prev(seq, ${max})
+                undone = undone && ordinal_walk_next(lower, ${max}).join(",") == seq.join(",")
+                falling = falling && Y_Sequence.cmp(lower.join(","), seq.join(",")) == -1
+                full = full && lower.length == ${max} && ordinal_walk_standard(lower)
+                seq = lower
+            }
+            return JSON.stringify({ undone, falling, full })
+        })()`));
+        assert.deepEqual(result, { undone: true, falling: true, full: true }, `term limit ${max}`);
+    }
+    // terms past JavaScript's exact integers are left out instead of breaking the walk
+    const top = JSON.parse(run('JSON.stringify(ordinal_walk_prev([1, 3], 200))'));
+    assert.ok(top.length >= 53 && top.every(Number.isSafeInteger));
+    assert.equal(run('Y_Sequence.cmp(ordinal_walk_prev(ordinal_walk_prev([1, 3], 200), 200).join(","), ' + JSON.stringify(top.join(',')) + ')'), -1);
+});
+
+test('the inverse part walks its own input down from 1,3 to 1,1 and wraps', () => {
+    element('ordinal_walk_max_terms').value = '4';
+    element('inverse_walk_max_terms').value = '4';
+    search('1,2');
+    element('inverse_input').value = '';
+    run('inverse_search_time(); inverse_clicks = 0; inverse_walk_restart = false');
+
+    const up = walk_up(4);
+    const seen = [];
+    for (let i = 0; i < up.length + 2; i++) {
+        run('inverse_minus_one()');
+        seen.push(element('inverse_input').value);
+    }
+    assert.deepEqual(seen, up.slice().reverse().concat(['1,3', '1,2,4,8']));
+    assert.equal(element('inverse_walk_clicks').textContent, `clicks: ${up.length + 2}`);
+    assert.match(element('inverse_result').innerHTML, /Achievement day/);
+    // the first input part is left alone
+    assert.equal(element('search_input').value, '1,2');
+
+    // the analysis and the progress pages follow the part that was used last
+    run('update_search_progress()');
+    assert.equal(element('main_lngi_Content').textContent, '1,2,4,8');
+    assert.match(element('search_progress_source').textContent, /inverse input/);
+    run('ordinal_plus_one(); update_search_progress()');
+    assert.equal(element('main_lngi_Content').textContent, '1,2,1');
+    assert.doesNotMatch(element('search_progress_source').textContent, /inverse input/);
+    assert.equal(element('inverse_input').value, '1,2,4,8');
+});
+
+test('the inverse Max fills the term limit again and stops at 1,1', () => {
+    element('inverse_walk_max_terms').value = '5';
+    const press = (from) => {
+        element('inverse_input').value = from;
+        run('inverse_search_time(); inverse_clicks = 0; inverse_walk_restart = false; inverse_max()');
+        return [element('inverse_input').value, element('inverse_walk_clicks').textContent];
+    };
+    assert.deepEqual(press('1,2,4,8,16'), ['1,2,4,8,15', 'clicks: 1']);
+    assert.deepEqual(press('1,2,4,8,1'), ['1,2,4,7,11', 'clicks: 2']);
+    // trailing 1s come off one press at a time, then the sequence is refilled
+    assert.deepEqual(press('1,2,1,1,1'), ['1,1,1,1,1', 'clicks: 4']);
+    assert.deepEqual(press('1,1,1,1'), ['1,1', 'clicks: 2']);
+    assert.deepEqual(press('1,1'), ['1,2,4,8,16', 'clicks: 2']);
+    // anything the walk can't continue from starts at the top
+    assert.deepEqual(press('nonsense'), ['1,2,4,8,16', 'clicks: 2']);
+    element('inverse_input').value = '1,2,1,3';
+    run('inverse_search_time(); inverse_minus_one()');
+    assert.equal(element('inverse_input').value, '1,3');
+});
