@@ -66,7 +66,7 @@ function formatSeconds(totalSeconds) {
     return parts.filter(Boolean).join(' ');
 }
 function scratch_bar_init() {
-    for (var i = 0; i < 250; i++) {
+    for (var i = 0; i < 1024; i++) {
         const p = document.createElement("div")
         p.style.height = "6.25%";
         p.style.position = "absolute";
@@ -122,7 +122,7 @@ function update_search_progress() {
     document.getElementById("search_progress_source").textContent =
         `${sequence}${searched_ordinal ? "" : " (default: no valid search)"}; Max ω-Y Terms: ${maxTerms || "unlimited"}`
 
-    for (let i = 0; i < 250; i++) {
+    for (let i = 0; i < 1024; i++) {
         const el = document.getElementById(`bar_${i}`)
         const bar = model.bars[i]
         el.hidden = !bar
@@ -148,7 +148,7 @@ function ntl(m, maxTerms = 0) {
     var truncated = false
     var steps = 0
     var m = 1 - (m % 1)
-    while (ord.length < 100 && ord.split(",").at(-1) < 1e8 && steps < 250) {
+    while (ord.length < 100 && ord.split(",").at(-1) < 1e8 && steps < 1024) {
         super_list = super_list.concat([[ord, steps, m]])
         if (m <= 1e-14) {
             break
@@ -179,7 +179,7 @@ function ntl(m, maxTerms = 0) {
             break;
         }
     }
-    if (steps == 250) {
+    if (steps == 1024) {
         ord = ord.split(",");
         ord.pop();
         ord = ord.join(",");
