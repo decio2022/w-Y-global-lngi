@@ -120,14 +120,22 @@ function setValue(el, value) {
     el.value = value
 }
 
+// The bars are not capped at a fixed count: the chain a countdown walks through
+// can be hundreds of bars long (see ntl), so bars are created in chunks as a
+// countdown needs them and hidden again when it no longer does. The array
+// always holds `scratch_bar_created` bars; [0, scratch_bar_count) is the part
+// the current countdown fills.
 var scratch_bar_elements = []
+var scratch_bar_count = 0
+var scratch_bar_created = 0
 
-function scratch_bar_init() {
-    for (var i = 0; i < 53; i++) {
+function scratch_bar_ensure(n) {
+    const content = document.getElementById("scratch_content")
+    if (!content) return
+    while (scratch_bar_created < n) {
+        const i = scratch_bar_created++
         const p = document.createElement("div")
-        p.style.height = "6.25%";
-        p.style.position = "absolute";
-        p.style.top = `${i * 6.25}%`
+        p.style.position = "absolute"
         p.id = `bar_${i}`
         p.style.textWrap = `nowrap`
         p.title = "Click to jump to this sequence"
@@ -142,9 +150,27 @@ function scratch_bar_init() {
         p.appendChild(document.createTextNode(" "))
         p.appendChild(p._meta)
         p.addEventListener("click", () => jump_to_scratch_bar(i))
-        document.getElementById("scratch_content").appendChild(p)
+        content.appendChild(p)
         scratch_bar_elements[i] = p
     }
+}
+
+function hide_scratch_bar(index) {
+    const bar = scratch_bar_elements[index]
+    if (bar) {
+        if (bar.style.visibility !== "hidden") bar.style.visibility = "hidden"
+        scratch_bar_label_cache[index] = undefined
+        scratch_bar_meta_cache[index] = undefined
+    }
+}
+
+function scratch_bar_init() {
+    // Start from an empty container: a reload may run this again.
+    const content = document.getElementById("scratch_content")
+    if (content) content.textContent = ""
+    scratch_bar_elements = []
+    scratch_bar_created = 0
+    scratch_bar_ensure(8)
 }
 
 var lt = 0
@@ -160,51 +186,56 @@ var scratch_bar_label_cache = []
 var scratch_bar_meta_cache = []
 
 function update_scratch_bars(x, currentSimulatedTime) {
-    for (var i = 0; i < 53; i++) {
+    // One bar per entry of the chain: the whole countdown is shown, however many
+    // bars it takes. Bars past the end are hidden, and bars left over from a
+    // longer countdown are hidden too.
+    scratch_bar_ensure(super_list.length)
+    scratch_bar_count = super_list.length
+    for (var i = super_list.length; i < scratch_bar_created; i++) {
+        hide_scratch_bar(i)
+    }
+    for (var i = 0; i < super_list.length; i++) {
         const bar = scratch_bar_elements[i]
-        if (i < super_list.length) {
-            var u = x + super_list[i][2] / (2 ** super_list[i][1] / 2)
-            if (i == 0) {
-                u = Math.ceil(x)
+        var u = x + super_list[i][2] / (2 ** super_list[i][1] / 2)
+        if (i == 0) {
+            u = Math.ceil(x)
+        }
+
+        var t = get_time_inv(u)
+        // `currentSimulatedTime` is an elapsed time (see num_time), so the
+        // target has to be an elapsed time too — adding `st` here made every
+        // bar show "0 seconds left".
+        const secondsLeft = Math.max(0, (t - currentSimulatedTime) / 1000);
+
+        if (page == 1) {
+            if (bar.style.visibility !== "visible") bar.style.visibility = "visible"
+
+            const ordText = super_list[i][0] + (i == super_list.length - 1 ? ",1" : "")
+            // Convert instantly: no budget, no waiting for the next frame.
+            // convert_From_wY() is memoized, so repeat frames are cache hits.
+            const label = convert_From_wY(ordText, scratch_bar_display)
+            if (label !== scratch_bar_label_cache[i]) {
+                scratch_bar_label_cache[i] = label
+                bar._label.innerHTML = label
             }
 
-            var t = get_time_inv(u)
-            const secondsLeft = Math.max(0, ((t + st) - currentSimulatedTime) / 1000);
-
-            if (page == 1) {
-                if (bar.style.visibility !== "visible") bar.style.visibility = "visible"
-
-                const ordText = super_list[i][0] + (i == super_list.length - 1 ? ",1" : "")
-                // Convert instantly: no budget, no waiting for the next frame.
-                // convert_From_wY() is memoized, so repeat frames are cache hits.
-                const label = convert_From_wY(ordText, scratch_bar_display)
-                if (label !== scratch_bar_label_cache[i]) {
-                    scratch_bar_label_cache[i] = label
-                    bar._label.innerHTML = label
-                }
-
-                const percent = (1 - super_list[i][2]) * 100
-                const metaText =
-                    `(${percent.toFixed(2)}% / ` +
-                    (tt == 0 ? `${formatSeconds(secondsLeft)} left / ${(secondsLeft * 1000)}` : `in ${new Date(secondsLeft * 1000 + currentSimulatedTime).toLocaleString()}`) +
-                    `)`
-                if (metaText !== scratch_bar_meta_cache[i]) {
-                    scratch_bar_meta_cache[i] = metaText
-                    bar._meta.textContent = metaText
-                }
-
-                const bg = `hsl(${super_list[i][1] * 10},100%,90%)`
-                if (bar.style.backgroundColor !== bg) bar.style.backgroundColor = bg
-                const w = `${percent}%`
-                if (bar.style.width !== w) bar.style.width = w
+            const percent = (1 - super_list[i][2]) * 100
+            const metaText =
+                `(${percent.toFixed(2)}% / ` +
+                (tt == 0 ? `${formatSeconds(secondsLeft)} left / ${(secondsLeft * 1000)}` : `in ${new Date(secondsLeft * 1000 + currentSimulatedTime).toLocaleString()}`) +
+                `)`
+            if (metaText !== scratch_bar_meta_cache[i]) {
+                scratch_bar_meta_cache[i] = metaText
+                bar._meta.textContent = metaText
             }
-            if (i + 1 == super_list.length) {
-                lt = secondsLeft
-            }
-        } else {
-            if (bar.style.visibility !== "hidden") bar.style.visibility = "hidden"
-            scratch_bar_label_cache[i] = undefined
-            scratch_bar_meta_cache[i] = undefined
+
+            const bg = `hsl(${super_list[i][1] * 10},100%,90%)`
+            if (bar.style.backgroundColor !== bg) bar.style.backgroundColor = bg
+            const w = `${percent}%`
+            if (bar.style.width !== w) bar.style.width = w
+        }
+        if (i + 1 == super_list.length) {
+            lt = secondsLeft
         }
     }
 }
@@ -229,6 +260,10 @@ function scratch_bar_jump_target(i) {
     return { u: u_target, shown: shown, u_now: u_now }
 }
 
+// How long the click-to-jump search may spend trying clock steps before it
+// settles for the closest sequence it found (and flashes the bar).
+const SCRATCH_JUMP_BUDGET_MS = 120
+
 function scratch_common_terms(a, b) {
     var x = a.split(","), y = b.split(","), k = 0
     while (k < x.length && k < y.length && x[k] == y[k]) k++
@@ -245,30 +280,55 @@ function scratch_bar_blocked(i) {
 }
 
 function jump_to_scratch_bar(i) {
+    // Before the clock hits zero num_time() does not describe a sequence (and
+    // does not fill in super_list), so there is nothing to jump to yet.
+    if (virtualElapsed + timeOffset < 0) {
+        scratch_bar_blocked(i)
+        return false
+    }
     var target = scratch_bar_jump_target(i)
     if (!target) return false
     var savedElapsed = virtualElapsed
+    // The clock is the elapsed time in milliseconds, so the finest step it can
+    // hold is one ULP of the elapsed time itself. The jump is tried on the
+    // steps around the target time and every try is checked with num_time(),
+    // the very function the next frame uses to decide what to display.
     var base = get_time_inv(target.u)
-    var grid = Math.pow(2, Math.floor(Math.log2(base)) - 52)
-    var first = Math.round(base / grid) * grid
+    var grid = Math.pow(2, Math.floor(Math.log2(base)) - 52)         // ms per clock step
+    var first = Math.round(base / grid) * grid                       // grid step at the target
+    // The sequence is only reproduced inside a window of u that can be far
+    // narrower than one grid step — sometimes narrower than one ULP of u — so
+    // reach a few ULPs of u out in both directions.
     var uPerStep = grid / (4.605170185988091 * 864000 * Math.pow(10, 2 * (target.u - 2)))
     var reach = Math.max(4, Math.ceil(4 * Math.pow(2, Math.floor(Math.log2(Math.abs(target.u))) - 52) / uPerStep))
     var want = target.shown.split(",")
     var bestElapsed = null, bestTerms = -1, got = null
+    // A deep countdown can be a thousand bars long and each try costs a whole
+    // walk, so the search is time boxed: it gives up on the exact sequence
+    // rather than blocking the page.
+    var deadline = Date.now() + SCRATCH_JUMP_BUDGET_MS
     for (var k = 0; k <= reach; k++) {
         var offs = k == 0 ? [0] : [k, -k]
         for (var q = 0; q < offs.length; q++) {
             virtualElapsed = first + offs[q] * grid - timeOffset
+            // num_time() takes the elapsed time — this is the same expression
+            // update() hands it, so a hit here is exactly what will be shown.
             got = num_time(virtualElapsed + timeOffset)
             if (got[2] == target.shown) {
+                // Redraw straight away instead of waiting for the next frame.
                 document.getElementById("main_lngi_Content").innerHTML = `<i>${got[2]}</i>`
                 document.getElementById("main_lngi_bar").innerHTML = `${got[0]} to next ordinal (${got[1]} left)`
                 return true
             }
             var terms = scratch_common_terms(got[2], target.shown)
             if (terms > bestTerms) { bestTerms = terms; bestElapsed = virtualElapsed }
+            if (Date.now() > deadline) { k = reach; break }
         }
     }
+    // No reachable time reproduces the sequence: the window that does is
+    // narrower than the clock can step. Land on the closest one there is when it
+    // is still recognisably the same sequence, so the click moves the game on,
+    // and flash the bar to show it is not the exact sequence.
     if (bestElapsed !== null && bestTerms * 2 >= want.length) {
         virtualElapsed = bestElapsed
         got = num_time(virtualElapsed + timeOffset)
@@ -277,6 +337,8 @@ function jump_to_scratch_bar(i) {
         scratch_bar_blocked(i)
         return false
     }
+    // Nothing close enough: put the clock back and flash the bar so the click
+    // does not look like it did nothing.
     virtualElapsed = savedElapsed
     num_time(virtualElapsed + timeOffset)
     scratch_bar_blocked(i)
@@ -288,12 +350,29 @@ scratch_bar_init()
 var super_list = []
 
 
+// The countdown chain traded by ntl() is not capped at a number of bars: it
+// runs until the sequence ends by itself, or until a bar's sequence would have
+// a last term past NTL_MAX_LAST_TERM (the deep region around 3.9 otherwise runs
+// for thousands of bars and each walk costs ~0.2 ms per bar).
+const NTL_MAX_LAST_TERM = 1000
+// The number of bars is bounded the same way, by what the player is counting to:
+// the deepest countdowns live in a sliver of u where the chain jumps straight to
+// sequences with ~1000 terms, and without this they would trade a thousand bars
+// of those. Bounding the rows the same way as the terms keeps the worst
+// countdown at ~200 ms of work in a single frame instead of growing without
+// limit, and every bar still ends before its last term reaches the limit.
+var NTL_MAX_BARS = NTL_MAX_LAST_TERM
+
 function ntl(m) {
     super_list = []
     var ord = `1,${Math.max(1, Math.floor(m))}`
     var steps = 0
     var m = 1 - (m % 1)
-    while (ord.length < 100 && ord.split(",").at(-1) < 1e8 && steps < 53) {
+    // True once the chain has ended in a way that already leaves `ord` as the
+    // sequence to show (it popped onto one, or stopped at a too-large term), so
+    // the closing pop below must not run again.
+    var finished = false
+    while (super_list.length < NTL_MAX_BARS) {
         super_list = super_list.concat([[ord, steps, m]])
         if (m <= 1e-14) {
             break
@@ -308,6 +387,13 @@ function ntl(m) {
         var ordl = ord.split(",").length
         ord = base.slice(0, ordl + exp - 1).join(",")
         m = m - 1
+        // The bar the countdown stops at: its sequence already has a last term
+        // past the limit, so keep it as it is (it is what the player is
+        // counting towards) rather than popping its last term off.
+        if (Number(ord.split(",").at(-1)) > NTL_MAX_LAST_TERM) {
+            finished = true
+            break
+        }
         if (ord.split(",").at(-1) == 1) {
             ord = ord.split(",");
             ord.pop();
@@ -315,11 +401,11 @@ function ntl(m) {
 
             super_list.push([ord, steps, m]);
 
-            steps = 69
+            finished = true
             break;
         }
     }
-    if (steps == 53) {
+    if (!finished) {
         ord = ord.split(",");
         ord.pop();
         ord = ord.join(",");
@@ -463,10 +549,17 @@ document.getElementById("analysis_add").onclick = () => {
 
 renderAnalysisPanels();
 
+// What the game shows at an ELAPSED time (ms since the clock hit zero). This is
+// the one place that maps a time to a sequence: the main display, the progress
+// bars and the click-to-jump all go through it, so a jump is checked against
+// exactly the value the next frame is going to show.
+//
+// Callers pass the elapsed time itself (`virtualElapsed + timeOffset`), not
+// `st + elapsed`. The absolute timestamp is only used for display.
 function num_time(t,update_main_bar=true) {
-    var t_elapsed = Math.max(0, t - st)
+    var t_elapsed = Math.max(0, t)
     if (t_elapsed == 0) {
-        return `Not started yet. Wait for the clock to hit.<br>Time left: <span style="font-size: 150%">${((st - t) / 1000).toFixed(3)}s</span>`
+        return `Not started yet. Wait for the clock to hit.<br>Time left: <span style="font-size: 150%">${(-t / 1000).toFixed(3)}s</span>`
     } else {
         var u = get_time(t_elapsed)
         var j = num_to_lngi(u)
@@ -583,7 +676,12 @@ function update() {
     var deltaRealTime = now - lastRealTime;
     virtualElapsed += deltaRealTime*(pause%2)*milestoneMulti
     lastRealTime = now;
-    var simulatedTime = st + virtualElapsed + timeOffset;
+    // The clock is the elapsed time. `simulatedTime` used to be `st + elapsed`,
+    // but rounding an elapsed time of ~10^12 ms (30 years) onto the grid of
+    // doubles of that magnitude costs ~0.001 ms per step, and a second +
+    // millisecond display also lost the jump's sub-millisecond target. Elapsed
+    // time keeps ~0.0000005 ms steps, which is what the jump needs.
+    var simulatedTime = virtualElapsed + timeOffset;
     var u = num_time(simulatedTime);
     //player_time = simulatedTime
 
@@ -593,7 +691,7 @@ function update() {
     // every frame — it used to run 60 times a second for nothing.
     if (super_list.length > 0 && super_list.length !== _shoHiddenFor) {
         _shoHiddenFor = super_list.length
-        if (get_time(simulatedTime - st) > 4) {
+        if (get_time(simulatedTime) > 4) {
             const q = document.getElementsByClassName("SHO")
             for (var i = 0; i < q.length; i++) {
                 q[i].hidden = true
