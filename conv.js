@@ -9050,7 +9050,7 @@ function convert_from_wY_uncached(ord, mode) {
         if (Y_Sequence.cmp(ord, '1,2,4,8,13') == -1) {
             return Conv_BMS_OCF(trimArrayList(Y_to_DBMS(ord), BMS_Terms.valueAsNumber));
         }
-        return ord;
+        return 'Lim(2-shifted OCF)';
     }
 
     if (mode == "cOCF") {
@@ -9060,7 +9060,7 @@ function convert_from_wY_uncached(ord, mode) {
             else
                 return Conv_BMS_cOCF(trimArrayList(Conv_Y_sequence_BMS(ord), BMS_Terms.valueAsNumber));
         }
-        return ord;
+        return 'Lim(cOCF)';
     }
 
     if (mode == "EcOCF") {
@@ -9070,7 +9070,7 @@ function convert_from_wY_uncached(ord, mode) {
             else
                 return Conv_BMS_EcOCF(trimArrayList(Conv_Y_sequence_BMS(ord), BMS_Terms.valueAsNumber));
         }
-        return ord;
+        return 'Lim(EcOCF)';
     }
 
     if (mode == "BcOCF") {
@@ -9080,7 +9080,7 @@ function convert_from_wY_uncached(ord, mode) {
             else
                 return Conv_BMS__ECOCF(trimArrayList(Conv_Y_sequence_BMS(ord), BMS_Terms.valueAsNumber));
         }
-        return ord;
+        return 'Lim(BcOCF)';
     }
 
     if (mode == "PMS") {
