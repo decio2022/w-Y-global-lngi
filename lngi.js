@@ -84,22 +84,68 @@ function progress_term_limit() {
     return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
 }
 
+// Single-entry cache: a mode or page switch reuses the last model instead of
+// re-walking the decomposition (the walk alone costs tens of ms on deep searches).
+let progress_model_cache_key = null
+let progress_model_cache_value = null
 function progress_model(value, maxTerms) {
     const clamped = Math.max(2, Math.min(4, value))
-    if (clamped === 4) return { percent: 100, bars: [] }
-
-    // Use the original LNGI decomposition and its local milestone percentages.
-    const decomposition = num_to_lngi(clamped, maxTerms)
-    const bars = super_list.map(([ordinal, depth, remaining], index) => ({
-        ordinal: ordinal + (index === super_list.length - 1 && !decomposition[3] ? ",1" : ""),
-        depth,
-        percent: Math.max(0, Math.min(100, (1 - remaining) * 100))
-    })).filter(bar => bar.ordinal !== "1,3" &&
-        (!maxTerms || bar.ordinal.split(",").length <= maxTerms))
-    return { percent: (clamped - 2) * 50, bars }
+    const cacheKey = `${clamped}|${maxTerms}`
+    if (cacheKey === progress_model_cache_key) return progress_model_cache_value
+    let model
+    if (clamped === 4) {
+        model = { percent: 100, bars: [] }
+    } else {
+        // Use the original LNGI decomposition and its local milestone percentages.
+        const decomposition = num_to_lngi(clamped, maxTerms)
+        const bars = super_list.map(([ordinal, depth, remaining], index) => ({
+            ordinal: ordinal + (index === super_list.length - 1 && !decomposition[3] ? ",1" : ""),
+            depth,
+            percent: Math.max(0, Math.min(100, (1 - remaining) * 100))
+        })).filter(bar => bar.ordinal !== "1,3" &&
+            (!maxTerms || bar.ordinal.split(",").length <= maxTerms))
+        model = { percent: (clamped - 2) * 50, bars }
+    }
+    progress_model_cache_key = cacheKey
+    progress_model_cache_value = model
+    return model
 }
 
 let progress_render_key = null
+let bar_labels_key = null
+let bar_labels_token = 0
+
+// One time-boxed slice of converted labels: the first bar always renders, then
+// at most 256 bars or 8ms, whichever comes first.
+function render_bar_labels_slice(state) {
+    const bars = state.model.bars
+    const start = Date.now()
+    let count = 0
+    while (state.index < bars.length && count < 256 && Date.now() - start < 8) {
+        const i = state.index
+        const bar = bars[i]
+        document.getElementById(`bar_${i}`).innerHTML =
+            `${safe_convert(bar.ordinal, state.mode)} <small>(${bar.percent.toFixed(2)}%)</small>`
+        state.index = i + 1
+        count++
+    }
+    return state.index >= bars.length
+}
+
+// The first slice runs inline so a fresh search shows labels right away; the
+// rest rides requestAnimationFrame when the host has one (the tests don't, so
+// their renders stay synchronous). A newer search bumps bar_labels_token and
+// silently kills any slices still in flight for the old model.
+function schedule_bar_labels(state) {
+    while (state.token === bar_labels_token) {
+        if (render_bar_labels_slice(state)) return
+        if (typeof requestAnimationFrame === "function") {
+            requestAnimationFrame(() => schedule_bar_labels(state))
+            return
+        }
+    }
+}
+
 function update_search_progress() {
     const sequence = analysis_sequence()
     const value = analysis_value()
@@ -113,6 +159,8 @@ function update_search_progress() {
     progress_render_key = key
 
     const model = progress_model(value, maxTerms)
+    // Sync pass: shell text plus bar visibility and geometry, refreshed on every
+    // key change regardless of how far the deferred label slices have gotten.
     const mainBar = document.getElementById("main_lngi_bar")
     mainBar.style.width = `${model.percent}%`
     mainBar.style.backgroundColor = `hsl(${model.percent},90%,70%)`
@@ -127,11 +175,24 @@ function update_search_progress() {
         const bar = model.bars[i]
         el.hidden = !bar
         if (!bar) continue
-        el.innerHTML = `${safe_convert(bar.ordinal, scratch_bar_display)} <small>(${bar.percent.toFixed(2)}%)</small>`
         el.style.backgroundColor = `hsl(${bar.depth * 10},100%,90%)`
         el.style.width = `${bar.percent}%`
     }
     document.title = `ω-Y LNGI: ${sequence} → 1,3`
+
+    // Labels key on model, mode and notation settings only: a page or sequence
+    // change that leaves them alone reuses the labels already on screen.
+    const clamped = Math.max(2, Math.min(4, value))
+    const labelsKey = JSON.stringify([clamped, maxTerms, scratch_bar_display, notationSettings])
+    if (labelsKey === bar_labels_key) return
+    bar_labels_key = labelsKey
+    bar_labels_token++
+    // Drop the previous model's labels before the new slices arrive, so a
+    // partially flushed search never shows stale ordinals next to new ones.
+    for (let i = 0; i < model.bars.length; i++) {
+        document.getElementById(`bar_${i}`).innerHTML = ""
+    }
+    schedule_bar_labels({ token: bar_labels_token, index: 0, model, mode: scratch_bar_display })
 }
 
 scratch_bar_init()
@@ -212,13 +273,36 @@ function get_time_inv(n) {
 }
 
 //converts a ω-Y sequence for display, never letting a notation's range stop the app
+// Converted labels are memoized per (mode, settings): a single OCF conversion
+// can take tens of ms, the bar slices convert hundreds of ordinals, and the
+// page-2 panels re-convert the same sequence every frame. Touching any notation
+// setting drops the whole memo.
+let convert_memo = new Map()
+let convert_memo_settings = null
+function convert_settings_fingerprint() {
+    return ["Y_Terms", "BMS_Terms", "compress_bms", "format_cOCF"].map(id => {
+        const el = document.getElementById(id)
+        return `${el.value}:${!!el.checked}`
+    }).join("|")
+}
 function safe_convert(ord, mode) {
+    const settings = convert_settings_fingerprint()
+    if (settings !== convert_memo_settings) {
+        convert_memo.clear()
+        convert_memo_settings = settings
+    }
+    const memoKey = `${mode}\0${ord}`
+    if (convert_memo.has(memoKey)) return convert_memo.get(memoKey)
+    let result
     try {
-        return convert_From_wY(ord, mode)
+        result = convert_From_wY(ord, mode)
     } catch (e) {
         console.warn(`Can't convert ${ord} to ${mode}:`, e)
-        return ord
+        result = ord
     }
+    if (convert_memo.size >= 8192) convert_memo.clear()
+    convert_memo.set(memoKey, result)
+    return result
 }
 
 //The sequence the analysis part converts: the one searched in the Search tab,

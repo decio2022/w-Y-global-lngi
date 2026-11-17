@@ -82,3 +82,63 @@ test('invalid input falls back safely and later milestones cannot overfill the c
     assert.equal(element('main_lngi_bar').style.width, '100%');
     assert.ok(Array.from({ length: 1024 }, (_, i) => element(`bar_${i}`).hidden).every(Boolean));
 });
+
+test('deep searches fill bar labels incrementally and every mode keeps its converted labels', () => {
+    // Unrestricted walk, so the deep search really produces 1014 bars.
+    element('MaxTerms').value = '0';
+    element('ordinal_walk_max_terms').value = '0';
+    // OCF conversion needs the BMS helpers conv.js only exposes on window.
+    run('dbmsToBms = window.dbmsToBms; bmsToDbms = window.bmsToDbms');
+    // Fake rAF queue: label slices beyond the first become observable, and
+    // flush() plays them back the way the browser would across frames.
+    const queue = [];
+    context.requestAnimationFrame = (fn) => { queue.push(fn); };
+    const flush = () => { while (queue.length) queue.shift()(); };
+    // conv.js reads these as globals; the settings fingerprint keeps reading
+    // the (stable) mock elements, so the memo is never dropped mid-test.
+    context.format_cOCF = { checked: true };
+    context.compress_BMS = { checked: false };
+    try {
+        search('1,2,4,8,16,32,64,128,256,512');
+        assert.ok(element('bar_0').innerHTML !== '', 'first slice labels bar_0 synchronously');
+        assert.equal(element('bar_500').innerHTML, '', 'deferred bars stay unlabeled until flushed');
+        assert.ok(queue.length > 0, 'remaining slices are queued for rAF');
+        flush();
+        assert.ok(element('bar_500').innerHTML !== '', 'flushed slices label the deep bars');
+
+        // 369 bars: bar_300 sits past the 256-bar first slice, so it only
+        // appears after a flush.
+        search('1,2,4,8,16,32,64,128,213');
+        flush();
+        const wYDeep = element('bar_300').innerHTML;
+        assert.ok(wYDeep !== '', 'flushed 369-search labels reach bar_300');
+
+        run('scratch_bar_display = "BcOCF"; update_search_progress()');
+        assert.ok(element('bar_0').innerHTML.includes('<sup'), 'first slice converts synchronously');
+        assert.equal(element('bar_300').innerHTML, '', 'later bars wait for their slice');
+        assert.ok(queue.length > 0, 'BcOCF labels continue across frames');
+        flush();
+        assert.ok(element('bar_300').innerHTML.includes('<sup'), 'flushed BcOCF label arrives');
+
+        run('scratch_bar_display = "wY"; update_search_progress()');
+        flush();
+        assert.equal(element('bar_300').innerHTML, wYDeep, 'returning to wY restores byte-identical labels');
+
+        search('1,2');
+        const wY = element('bar_0').innerHTML;
+        assert.ok(wY.startsWith('1,2,4 '), `wY bar_0 starts as the raw sequence, got: ${wY}`);
+        for (const mode of ['cOCF', 'EcOCF', 'BcOCF']) {
+            run(`scratch_bar_display = ${JSON.stringify(mode)}; update_search_progress()`);
+            flush();
+            assert.ok(element('bar_0').innerHTML.includes('ε'), `${mode} labels carry epsilon`);
+        }
+        run('scratch_bar_display = "wY"; update_search_progress()');
+        flush();
+        assert.equal(element('bar_0').innerHTML, wY, 'wY round-trips byte-identically');
+    } finally {
+        delete context.requestAnimationFrame;
+        delete context.format_cOCF;
+        delete context.compress_BMS;
+        run('scratch_bar_display = "wY"');
+    }
+});
