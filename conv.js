@@ -1065,6 +1065,130 @@ function Conv_Y_sequence_BMS(ord) {
 }
 
 function Conv_BMS_OCF(matrix) {
+    // --- Memoization of the OCF pretty-printer -------------------------------
+    // display() works on the *string* representation of an ordinal and re-parses
+    // it over and over: firstTerm()/arg()/lt()/add()/split() are re-derived from
+    // the same sub-strings millions of times (a single 25-term ordinal used to
+    // cost ~10M firstTerm() and ~3.4M lt() calls, i.e. up to ~650ms of blocking
+    // work per conversion). Because every one of these helpers is a pure
+    // function of its string arguments, caching them by argument makes the whole
+    // conversion collapse to a few hundred real calls (~2-4ms worst case, most
+    // ordinals well below 1ms).
+    //
+    // The caches live inside this call, so they are simply dropped once the
+    // conversion is done: no cross-sequence memory growth, no stale results.
+    // A size guard on the two-level caches keeps a pathological ordinal from
+    // ballooning memory (only ever hit in the miss path, so it costs nothing
+    // on the hot path).
+    var MEMO_LIMIT = 20000;
+    var _ftCache = new Map();   // firstTerm(x)
+    var _argCache = new Map();  // arg(x)
+    var _ltCache = new Map();   // lt(x, y)
+    var _spCache = new Map();   // split(x, y)
+    var _addCache = new Map();  // add(x, y)
+    var _ttc = new Map();       // ttc(x, y)
+    var _pCache = new Map();    // P(M, r, n) - one matrix per conversion
+    var _cCache = new Map();    // C(M, n)     - ditto
+    var _uc = new Map();        // U(M, n)     - ditto
+    var _skc = new Map();       // skipped(M, n)
+    var _skInProgress = new Set();
+
+    function firstTerm(x) {
+        if (typeof x !== 'string') return firstTerm_u(x);
+        var v = _ftCache.get(x);
+        if (v === undefined) { v = firstTerm_u(x); _ftCache.set(x, v); }
+        return v;
+    }
+    function arg(x) {
+        if (typeof x !== 'string') return arg_u(x);
+        var v = _argCache.get(x);
+        if (v === undefined) { v = arg_u(x); _argCache.set(x, v); }
+        return v;
+    }
+    function lt(x, y) {
+        if (typeof x !== 'string' || typeof y !== 'string') return lt_u(x, y);
+        if (x === y) return false;
+        var m = _ltCache.get(x);
+        if (m === undefined) { m = new Map(); _ltCache.set(x, m); }
+        var v = m.get(y);
+        if (v === undefined) {
+            if (m.size > MEMO_LIMIT) m.clear();
+            v = lt_u(x, y); m.set(y, v);
+        }
+        return v;
+    }
+    function split(x, y) {
+        if (typeof x !== 'string' || typeof y !== 'string') return split_u(x, y);
+        var m = _spCache.get(x);
+        if (m === undefined) { m = new Map(); _spCache.set(x, m); }
+        var v = m.get(y);
+        if (v === undefined) {
+            if (m.size > MEMO_LIMIT) m.clear();
+            v = split_u(x, y); m.set(y, v);
+        }
+        return v;
+    }
+    function add(x, y) {
+        if (typeof x !== 'string' || typeof y !== 'string') return add_u(x, y);
+        var m = _addCache.get(x);
+        if (m === undefined) { m = new Map(); _addCache.set(x, m); }
+        var v = m.get(y);
+        if (v === undefined) {
+            if (m.size > MEMO_LIMIT) m.clear();
+            v = add_u(x, y); m.set(y, v);
+        }
+        return v;
+    }
+    function ttc(a, b) {
+        if (typeof a !== 'string' || typeof b !== 'string') return ttc_u(a, b);
+        var m = _ttc.get(a);
+        if (m === undefined) { m = new Map(); _ttc.set(a, m); }
+        var v = m.get(b);
+        if (v === undefined) {
+            if (m.size > MEMO_LIMIT) m.clear();
+            v = ttc_u(a, b); m.set(b, v);
+        }
+        return v;
+    }
+    function P(M, r, n) {
+        if (r < 0) return n - 1;
+        var k = n + '\u0001' + r;
+        var v = _pCache.get(k);
+        if (v === undefined) { v = P_u(M, r, n); _pCache.set(k, v); }
+        return v;
+    }
+    function C(M, n) {
+        var v = _cCache.get(n);
+        if (v === undefined) {
+            v = C_u(M, n);
+            if (_cCache.size > MEMO_LIMIT) _cCache.clear();
+            _cCache.set(n, v);
+        }
+        return v;
+    }
+    function U(M, n) {
+        var v = _uc.get(n);
+        if (v === undefined) { v = U_u(M, n); _uc.set(n, v); }
+        return v;
+    }
+    // skipped() is recursive through its own result (children first, then the
+    // children of every entry), so the memo rebuilds exactly that order once and
+    // reuses it afterwards. The in-progress set only protects against a matrix
+    // that would loop back on itself.
+    function skipped(M, n) {
+        var v = _skc.get(n);
+        if (v !== undefined) return v;
+        if (_skInProgress.has(n)) return sk_u(M, n);
+        _skInProgress.add(n);
+        var out = sk_u(M, n);
+        _skInProgress.delete(n);
+        for (var i = 0; i < out.length; i++) {
+            var sub = skipped(M, out[i]);
+            for (var j = 0; j < sub.length; j++) out.push(sub[j]);
+        }
+        _skc.set(n, out);
+        return out;
+    }
     function eq(a, b) {
         if (typeof (a) == 'number') { return a == b; }
         if (a.length == 2) { return eq(a[0], b[0]) && eq(a[1], b[1]); }
@@ -1081,7 +1205,7 @@ function Conv_BMS_OCF(matrix) {
         return i;
     }
 
-    function firstTerm(x) {
+    function firstTerm_u(x) {
         let m = paren(x, 1);
         return [x.slice(0, m + 1), x.slice(m + 2) || '0'];
     }
@@ -1096,11 +1220,11 @@ function Conv_BMS_OCF(matrix) {
         return [firstTerm(x)[0]].concat(terms(firstTerm(x)[1]));
     }
 
-    function arg(x) {
+    function arg_u(x) {
         return firstTerm(x)[0].slice(2, -1);
     }
 
-    function lt(x, y) {
+    function lt_u(x, y) {
         if (y == '0') { return false; }
         if (x == '0') { return true; }
         if (x[0] == 'p' && y[0] == 'P') { return true; }
@@ -1111,7 +1235,7 @@ function Conv_BMS_OCF(matrix) {
 
     function gt(x, y) { return !(x == y || lt(x, y)) }
 
-    function add(x, y) {
+    function add_u(x, y) {
         if (x == '0') { return y; }
         if (y == '0') { return x; }
         if (lt(firstTerm(x)[0], firstTerm(y)[0])) { return y; }
@@ -1160,7 +1284,7 @@ function Conv_BMS_OCF(matrix) {
         return add(exp(add(log(a), log(b))), mul(a, firstTerm(b)[1]))
     }
 
-    function split(a, x) {
+    function split_u(a, x) {
         if (a == '0') { return ['0', '0']; }
         if (lt(a, x)) { return ['0', a]; }
         if (lt(firstTerm(a)[0], x)) { return ['0', a]; }
@@ -1247,14 +1371,14 @@ function Conv_BMS_OCF(matrix) {
 
     // END COCF
 
-    function P(M, r, n) {
+    function P_u(M, r, n) {
         if (r == -1) { return n - 1; }
         let q = P(M, r - 1, n);
         while (q > -1 && M[q][r] >= M[n][r]) { q = P(M, r - 1, q); }
         return q;
     }
 
-    function C(M, n) {
+    function C_u(M, n) {
         let X = [];
         for (let i = 0; i < M.length; i++) {
             if (P(M, 0, i) == n) { X.push(i); }
@@ -1281,7 +1405,7 @@ function Conv_BMS_OCF(matrix) {
         return X;
     }
 
-    function U(M, n) {
+    function U_u(M, n) {
         if (M[n][1] == 0 || M[n][2] == 1 || n + 1 == M.length) { return [0, null]; }
         let m = P(M, 1, n);
         let L = [M[m][0] + 1, M[n][1], M[m][2] + 1];
@@ -1364,12 +1488,11 @@ function Conv_BMS_OCF(matrix) {
         return `p(${add(mul('P(0)', v(M, n, k)), S)})`;
     }
 
-    function skipped(M, n) {
+    function sk_u(M, n) {
         let S = [];
         let u = [...Array(M.length).keys()].map(x => (U(M, x)[0] == 1 ? U(M, x)[1] : null));
         //let u2=[...Array(M.length).keys()].map(x=>(U(M,x)[0]==2?U(M,x)[1]:null));
         for (let i of C(M, n)) {
-            S = S.concat(skipped(M, i)); // for display purposes
             if (M[i][2] && M[n][2]) { S.push(i); continue; }
             if (u.includes(i)) {
                 let c = C(M, i);
@@ -1393,7 +1516,7 @@ function Conv_BMS_OCF(matrix) {
     function _01(a) { return firstTerm(a)[0]; }
     function _2(a) { return firstTerm(a)[1]; }
 
-    function ttc(a, b) {
+    function ttc_u(a, b) {
         if (a == '0') { return '0'; }
         if (ttc(_2(a), b) == '0' && lt(_01(a), psi(b))) { return '0'; }
         return add(_01(a), ttc(_2(a), b));
@@ -8968,11 +9091,10 @@ let Y_Terms = document.getElementById("Y_Terms");
 let BMS_Terms = document.getElementById("BMS_Terms");
 
 // Notation conversions run for every progress bar and analysis panel on every
-// animation frame, and the OCF conversions can cost tens of milliseconds each
-// - selecting an OCF notation used to freeze the page. Results are memoized
-// per (sequence, notation, settings); convert_From_wY_peek() looks a
-// conversion up without computing it, so a render loop can spread cache misses
-// over several frames inside a small time budget.
+// animation frame, and the OCF conversions can cost tens of milliseconds each.
+// Results are memoized per (sequence, notation, settings) and conversions are
+// instant: every needed conversion runs immediately in the current frame,
+// with no time budget and no waiting for the next frame.
 const convert_cache = new Map();
 const CONVERT_CACHE_LIMIT = 4096;
 
@@ -8989,12 +9111,6 @@ function convert_cache_put(key, value) {
     if (convert_cache.size >= CONVERT_CACHE_LIMIT) convert_cache.clear();
     convert_cache.set(key, value);
     return value;
-}
-
-// The cached conversion for (ord, mode), or undefined when it still has to be
-// computed.
-function convert_From_wY_peek(ord, mode) {
-    return convert_cache.get(convert_cache_key(ord, mode));
 }
 
 // Memoizing wrapper around convert_from_wY_uncached(). A failing notation

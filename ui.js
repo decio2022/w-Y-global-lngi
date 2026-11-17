@@ -222,17 +222,24 @@ function saveAllSettings() {
 }
 
 function saveMisc() {
-    const misc = {
-        //time based events
-        time: player_time,
-        // Save mechanic: persist the full simulated progress so reloading
-        // resumes at the reached LNGI sequence instead of resetting to 1,1.
-        virtualElapsed: virtualElapsed,
-        timeOffset: timeOffset,
-        milestoneMulti: milestoneMulti,
-        pause: pause
+    // Only persist when the app is actually running (not paused by a long idle)
+    // and throttle to ~10 times per second (once per ~100ms) to avoid blocking
+    // the animation frame loop.
+    const now = Date.now()
+    if (!saveMisc._last || now - saveMisc._last >= 100) {
+        saveMisc._last = now
+        const misc = {
+            //time based events
+            time: player_time,
+            // Save mechanic: persist the full simulated progress so reloading
+            // resumes at the reached LNGI sequence instead of resetting to 1,1.
+            virtualElapsed: virtualElapsed,
+            timeOffset: timeOffset,
+            milestoneMulti: milestoneMulti,
+            pause: pause
+        }
+        localStorage.setItem("lngi_app_misc", JSON.stringify(misc))
     }
-    localStorage.setItem("lngi_app_misc", JSON.stringify(misc))
 }
 
 // Note: loadMisc() is defined in lngi.js (loaded after ui.js) and is the single

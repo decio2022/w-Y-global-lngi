@@ -2921,6 +2921,16 @@ function get_virtual_elapsed() {
 
 var visibleMilestones = new Set();
 
+// viewport check. IntersectionObserver only tells us when a box enters/leaves,
+// and it happily stays in the set while the tab it lives on is display:none, so
+// ask the layout directly (cheap: one getBoundingClientRect per visible box).
+function isElementVisible(el) {
+    if (!el || !el.getClientRects().length) return false;
+    const r = el.getBoundingClientRect();
+    return r.bottom > 0 && r.top < (window.innerHeight || document.documentElement.clientHeight);
+}
+
+
 //in fact, i still idk what's an observer
 const milestoneObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
@@ -2982,8 +2992,14 @@ function init_milestones() {
 
 // Update timer values for visible elements
 function update_milestones() {
+    // Only re-render the boxes that are actually on screen. Every .tmilestone-box
+    // is still "observed", so on the Milestone tab this used to rewrite the full
+    // innerHTML of every box that had ever been scrolled into view — each frame —
+    // which is more than enough main-thread work to drop out of 60fps.
     visibleMilestones.forEach(element => {
-        renderMilestoneBox(element);
+        if (element.isConnected && isElementVisible(element)) {
+            renderMilestoneBox(element);
+        }
     });
 
     var N = 0
@@ -2993,9 +3009,18 @@ function update_milestones() {
         N = N+1
     }
     var T = vt - get_time_inv(valid_milestones[N][4]);
-    document.getElementById("real_milestone_next").innerHTML = `${N}# ${valid_milestones[N][0]} / ${valid_milestones[N][1]}<br>in ${formatSeconds(-T / 1000)}`
+    // Only update the DOM if the milestone index or time changed
+    const nextHTML = `${N}# ${valid_milestones[N][0]} / ${valid_milestones[N][1]}<br>in ${formatSeconds(-T / 1000)}`
+    const el = document.getElementById("real_milestone_next")
+    if (el && el.innerHTML !== nextHTML) {
+        el.innerHTML = nextHTML
+    }
 }
 
 // Initialize all elements eagerly on page load
 init_milestones();
-setInterval(update_milestones, 10);
+// The update_milestones() function is already called every frame from lngi.js update()
+// (line 609 in the original, now line ~634). The 10ms interval is redundant and
+// causes double-rendering and lag. We remove the interval.
+// setInterval(update_milestones, 10);
+

@@ -1,40 +1,80 @@
 // expose the requestrender func
 
-const renderer = (() => {
-    var canvas;
-    var ctx;
-    var outimg;
-    var cursorstr = "▮";
-    var cursorendstr = "▯";
-    var lineBreakRegex = /\r?\n/g;
-    var itemSeparatorRegex = /[\t ,]/g;
+    // expose the requestrender func
 
-    let _STACKMODE = document.getElementById("STACKMODE")
-    let _HIGHLIGHT = document.getElementById("HIGHLIGHT")
-    let _EXTRADIVIDER = document.getElementById("EXTRADIVIDER")
+    const renderer = (() => {
+        var canvas;
+        var ctx;
+        var outimg;
+        var cursorstr = "▮";
+        var cursorendstr = "▯";
+        var lineBreakRegex = /\r?\n/g;
+        var itemSeparatorRegex = /[ \t,]/g;
 
-    window.addEventListener("load", function () {
-        canvas = document.getElementById("output");
-        ctx = canvas.getContext("2d");
-        outimg = document.getElementById("outimg");
-        load();
-        requestDraw(true);
-        drawIntervalLoopFunc();
+        let _STACKMODE = document.getElementById("STACKMODE")
+        let _HIGHLIGHT = document.getElementById("HIGHLIGHT")
+        let _EXTRADIVIDER = document.getElementById("EXTRADIVIDER")
 
-        setInterval(() => {
-            if (hasRequestedDraw) processDrawRequest();
-        }, 16); // not 0
-    });
+        // Cache DOM lookups for the visualizer loop
+        const elCache = new Map()
+        function $(id) {
+            let el = elCache.get(id)
+            if (!el) {
+                el = document.getElementById(id)
+                if (el) elCache.set(id, el)
+            }
+            return el
+        }
 
-    function drawIntervalLoopFunc() {
-        requestDraw(true);
-        setTimeout(drawIntervalLoopFunc, 0);
-    }
-    var hasRequestedDraw = false;
-    var hasRequestedRecalculation = false;
-    function requestDraw(recalculate) {
-        hasRequestedRecalculation = hasRequestedRecalculation || recalculate;
-        hasRequestedDraw = true;
+        window.addEventListener("load", function () {
+            canvas = document.getElementById("output");
+            ctx = canvas.getContext("2d");
+            outimg = document.getElementById("outimg");
+            load();
+            requestDraw(true);
+            drawIntervalLoopFunc();
+
+            // The 16ms interval is redundant with the drawIntervalLoopFunc()
+            // setTimeout(0) loop and requestAnimationFrame in lngi.js.
+            // We remove it to avoid double rendering.
+            /*
+            setInterval(() => {
+                if (hasRequestedDraw) processDrawRequest();
+            }, 16); // not 0
+            */
+        });
+
+        function drawIntervalLoopFunc() {
+            requestDraw(true);
+            setTimeout(drawIntervalLoopFunc, 0);
+        }
+        var hasRequestedDraw = false;
+        var hasRequestedRecalculation = false;
+        function requestDraw(recalculate) {
+            hasRequestedRecalculation = hasRequestedRecalculation || recalculate;
+            hasRequestedDraw = true;
+        }
+        function processDrawRequest() {
+            if (page != 3) return;
+            try {
+                draw(hasRequestedRecalculation);
+            } catch (e) {
+                throw e;
+            }
+            hasRequestedDraw = false;
+            hasRequestedRecalculation = false;
+        }
+        var calculatedMountain = null;
+        function parseSequenceElement(s, i) {
+            var strremoved = s;
+            if (strremoved.indexOf(cursorstr) != -1) {
+                strremoved = strremoved.substring(0, strremoved.indexOf(cursorstr)) + strremoved.substring(strremoved.indexOf(cursorstr) + 1);
+            }
+            if (strremoved.indexOf(cursorendstr) != -1) {
+                strremoved = strremoved.substring(0, strremoved.indexOf(cursorendstr)) + strremoved.substring(strremoved.indexOf(cursorendstr) + 1);
+            }
+            if (strremoved.indexOf("v") == -1 || !isFinite(Number(strremoved.substring(strremoved.indexOf("v") + 1)))) {
+                var numval = Number(strremoved);
     }
     function processDrawRequest() {
         if (page != 3) return;

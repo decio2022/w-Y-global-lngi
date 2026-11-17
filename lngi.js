@@ -91,6 +91,37 @@ function formatSeconds(totalSeconds) {
 
     return parts.filter(Boolean).join(' ');
 }
+// Cached DOM lookups: update() runs every animation frame, so repeated
+// getElementById() calls and unconditional innerHTML/style writes dominate
+// the frame cost. These helpers only touch the DOM when the value changed.
+var _elCache = new Map()
+function $(id) {
+    let el = _elCache.get(id)
+    if (!el) {
+        el = document.getElementById(id)
+        if (el) _elCache.set(id, el)
+    }
+    return el
+}
+function setHTML(el, html) {
+    if (!el || el._lastHTML === html) return
+    el._lastHTML = html
+    el.innerHTML = html
+}
+function setText(el, text) {
+    if (!el || el._lastText === text) return
+    el._lastText = text
+    el.textContent = text
+}
+// Same idea for <input> values, which the mountain sync used to rewrite every
+// frame whether or not the sequence had changed.
+function setValue(el, value) {
+    if (!el || el.value === value) return
+    el.value = value
+}
+
+var scratch_bar_elements = []
+
 function scratch_bar_init() {
     for (var i = 0; i < 53; i++) {
         const p = document.createElement("div")
@@ -112,6 +143,7 @@ function scratch_bar_init() {
         p.appendChild(p._meta)
         p.addEventListener("click", () => jump_to_scratch_bar(i))
         document.getElementById("scratch_content").appendChild(p)
+        scratch_bar_elements[i] = p
     }
 }
 
@@ -119,21 +151,17 @@ var lt = 0
 // Last notation rendered on each bar. The notation conversion itself is
 // memoized in convert_From_wY(), and a label is only rewritten when its text
 // actually changes, so a frame only pays for labels that are genuinely new
-// instead of re-converting every bar like it used to.
+// instead of re-converting every bar like it used to. Conversions are instant:
+// every bar is converted in the same frame it is needed, with no time budget.
 var scratch_bar_label_cache = []
-// Per-frame time budget for converting notations that are not cached yet:
-// switching the milestone-bar notation to an OCF variation now fills the
-// labels in over a few frames instead of freezing the page.
-var SCRATCH_BAR_CONVERT_BUDGET_MS = 6
-
-function scratch_bar_clock() {
-    return (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now()
-}
+// Last meta text (percentage / countdown) shown on each bar. The countdown only
+// changes ~10 times a second, so this keeps most frames from touching those
+// text nodes at all.
+var scratch_bar_meta_cache = []
 
 function update_scratch_bars(x, currentSimulatedTime) {
-    const convertDeadline = scratch_bar_clock() + SCRATCH_BAR_CONVERT_BUDGET_MS
     for (var i = 0; i < 53; i++) {
-        const bar = document.getElementById(`bar_${i}`)
+        const bar = scratch_bar_elements[i]
         if (i < super_list.length) {
             var u = x + super_list[i][2] / (2 ** super_list[i][1] / 2)
             if (i == 0) {
@@ -144,40 +172,39 @@ function update_scratch_bars(x, currentSimulatedTime) {
             const secondsLeft = Math.max(0, ((t + st) - currentSimulatedTime) / 1000);
 
             if (page == 1) {
-                bar.style.visibility = "visible"
+                if (bar.style.visibility !== "visible") bar.style.visibility = "visible"
 
                 const ordText = super_list[i][0] + (i == super_list.length - 1 ? ",1" : "")
-                let label = convert_From_wY_peek(ordText, scratch_bar_display)
-                if (label === undefined) {
-                    // Not converted yet: convert only while this frame still
-                    // has budget left, otherwise keep the label that is
-                    // already on screen and retry on the next frame.
-                    if (scratch_bar_clock() < convertDeadline) {
-                        label = convert_From_wY(ordText, scratch_bar_display)
-                    } else {
-                        label = scratch_bar_label_cache[i]
-                        if (label === undefined) label = ordText
-                    }
-                }
+                // Convert instantly: no budget, no waiting for the next frame.
+                // convert_From_wY() is memoized, so repeat frames are cache hits.
+                const label = convert_From_wY(ordText, scratch_bar_display)
                 if (label !== scratch_bar_label_cache[i]) {
                     scratch_bar_label_cache[i] = label
                     bar._label.innerHTML = label
                 }
 
-                bar._meta.textContent =
-                    `(${((1 - super_list[i][2]) * 100).toFixed(2)}% / ` +
+                const percent = (1 - super_list[i][2]) * 100
+                const metaText =
+                    `(${percent.toFixed(2)}% / ` +
                     (tt == 0 ? `${formatSeconds(secondsLeft)} left / ${(secondsLeft * 1000)}` : `in ${new Date(secondsLeft * 1000 + currentSimulatedTime).toLocaleString()}`) +
                     `)`
+                if (metaText !== scratch_bar_meta_cache[i]) {
+                    scratch_bar_meta_cache[i] = metaText
+                    bar._meta.textContent = metaText
+                }
 
-                bar.style.backgroundColor = `hsl(${super_list[i][1] * 10},100%,90%)`
-                bar.style.width = `${(1 - super_list[i][2]) * 100}%`
+                const bg = `hsl(${super_list[i][1] * 10},100%,90%)`
+                if (bar.style.backgroundColor !== bg) bar.style.backgroundColor = bg
+                const w = `${percent}%`
+                if (bar.style.width !== w) bar.style.width = w
             }
             if (i + 1 == super_list.length) {
                 lt = secondsLeft
             }
         } else {
-            bar.style.visibility = "hidden"
+            if (bar.style.visibility !== "hidden") bar.style.visibility = "hidden"
             scratch_bar_label_cache[i] = undefined
+            scratch_bar_meta_cache[i] = undefined
         }
     }
 }
@@ -455,7 +482,10 @@ function num_time(t,update_main_bar=true) {
 }
 
 var tps = 0
+var tpsAvg = 0
 var last_tick = Date.now()
+// Last super_list length for which the "SHO" option groups were already hidden.
+var _shoHiddenFor = -1
 let sync_mountain = document.getElementById("_UPDATEMODE")
 let MaxYTerms = document.getElementById("MaxTerms")
 
@@ -546,7 +576,9 @@ function cliques(e) {
 
 function update() {
     var now = Date.now();
-    tps = 1000 / (now - last_tick);
+    // Rolling average so the readout isn't pure frame-to-frame noise.
+    tps = 1000 / ((now - last_tick) || 1);
+    tpsAvg = tpsAvg ? tpsAvg * 0.9 + tps * 0.1 : tps;
     last_tick = now;
     var deltaRealTime = now - lastRealTime;
     virtualElapsed += deltaRealTime*(pause%2)*milestoneMulti
@@ -555,25 +587,32 @@ function update() {
     var u = num_time(simulatedTime);
     //player_time = simulatedTime
 
-    if (get_time(simulatedTime - st) > 4) {
-        const q = document.getElementsByClassName("SHO")
-        for (var i in q) {
-            q[i].hidden = true
+    // The "SHO" notation option groups get hidden once the sequence is past the
+    // point where those notations still work. Doing the class lookup (and the
+    // write) only when the sequence actually grew keeps the write off almost
+    // every frame — it used to run 60 times a second for nothing.
+    if (super_list.length > 0 && super_list.length !== _shoHiddenFor) {
+        _shoHiddenFor = super_list.length
+        if (get_time(simulatedTime - st) > 4) {
+            const q = document.getElementsByClassName("SHO")
+            for (var i = 0; i < q.length; i++) {
+                q[i].hidden = true
+            }
         }
     }
 
-    document.getElementById("main_lngi_Content").innerHTML = `<i>${u[2]}</i>`
+    setHTML($("main_lngi_Content"), `<i>${u[2]}</i>`)
     // Feed the displayed sequence to the Highest terms tracker (runs on every
     // tab, so records are kept even while the tab is closed). The rewind check
     // has to run first: it drops records from a future the player jumped back
     // out of before the current sequence is tracked again.
     highest_terms_check_rewind(virtualElapsed + timeOffset)
     track_highest_terms(Array.isArray(u) ? u[2] : null)
-    document.getElementById("main_lngi_bar").innerHTML = `${u[0]} to next ordinal (${u[1]} left)`
+    setHTML($("main_lngi_bar"), `${u[0]} to next ordinal (${u[1]} left)`)
     updatePauseIndicator();
-    document.getElementById("tps").innerHTML = isPaused() ? `⏸ Paused — click the sequence to resume` : `${tps.toFixed(1)} tps`
-    document.getElementById("milestoneMulti").innerHTML = `Time speed: ${milestoneMulti}`
-    if (page == 3 && sync_mountain.checked) { document.getElementById("input").value = trimStringList(u[2], MaxYTerms.valueAsNumber) }
+    setHTML($("tps"), isPaused() ? `⏸ Paused — click the sequence to resume` : `${tpsAvg.toFixed(1)} tps`)
+    setHTML($("milestoneMulti"), `Time speed: ${milestoneMulti}`)
+    if (page == 3 && sync_mountain.checked) { setValue($("input"), trimStringList(u[2], MaxYTerms.valueAsNumber)) }
     if (page == 2) {
         analysisPanels.forEach(panel => {
             let txt = "";
@@ -585,18 +624,18 @@ function update() {
                     txt = convert_From_wY(u[2], panel.notation);
                     break;
             }
-            panel.element.innerHTML = txt;
-        })
+            setHTML(panel.element, txt);
+        });
     };
     const modifiedElapsedSeconds = Math.max(0, (virtualElapsed + timeOffset) / 1000);
     let timeStatusText = modifiedElapsedSeconds * 1000;
     const trueElapsedSeconds = Math.max(0, (now - st) / 1000);
     const diff = modifiedElapsedSeconds - trueElapsedSeconds;
-    document.getElementById("time").innerHTML =
+    setHTML($("time"),
         `Time elapsed: ${formatSeconds(modifiedElapsedSeconds)} Virtual Elapsed ${timeStatusText}
-        `;
-    document.getElementById("time_mode").innerHTML = `${tt == 0 ? "Time remaining" : "Time reached"} (Press to change)`
-
+        `);
+    setHTML($("time_mode"), `${tt == 0 ? "Time remaining" : "Time reached"} (Press to change)`)
+    
     document.title = `ω-Y LNGI: <${super_list.slice(0, 6).at(-1)[0]}`
 
     update_milestones(mpage)
