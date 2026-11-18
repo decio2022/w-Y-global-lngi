@@ -185,6 +185,16 @@ var scratch_bar_label_cache = []
 // text nodes at all.
 var scratch_bar_meta_cache = []
 
+function scratch_bar_sequence(i) {
+    return super_list[i][0] + (i === super_list.length - 1 ? ",1" : "")
+}
+
+function scratch_bar_boundary(i, x) {
+    if (i === 0) return Math.floor(x) + 1
+    const [, steps, remaining] = super_list[i]
+    return x + remaining * 2 ** (1 - steps)
+}
+
 function update_scratch_bars(x, currentSimulatedTime) {
     // One bar per entry of the chain: the whole countdown is shown, however many
     // bars it takes. Bars past the end are hidden, and bars left over from a
@@ -196,11 +206,7 @@ function update_scratch_bars(x, currentSimulatedTime) {
     }
     for (var i = 0; i < super_list.length; i++) {
         const bar = scratch_bar_elements[i]
-        var u = x + super_list[i][2] / (2 ** super_list[i][1] / 2)
-        if (i == 0) {
-            u = Math.ceil(x)
-        }
-
+        var u = scratch_bar_boundary(i, x)
         var t = get_time_inv(u)
         // `currentSimulatedTime` is an elapsed time (see num_time), so the
         // target has to be an elapsed time too — adding `st` here made every
@@ -210,7 +216,7 @@ function update_scratch_bars(x, currentSimulatedTime) {
         if (page == 1) {
             if (bar.style.visibility !== "visible") bar.style.visibility = "visible"
 
-            const ordText = super_list[i][0] + (i == super_list.length - 1 ? ",1" : "")
+            const ordText = scratch_bar_sequence(i)
             // Convert instantly: no budget, no waiting for the next frame.
             // convert_From_wY() is memoized, so repeat frames are cache hits.
             const label = convert_From_wY(ordText, scratch_bar_display)
@@ -242,22 +248,9 @@ function update_scratch_bars(x, currentSimulatedTime) {
 
 function scratch_bar_jump_target(i) {
     var u_now = get_time(Math.max(0, virtualElapsed + timeOffset))
-    var main_now = num_to_lngi(u_now)[0]
-    var n = super_list.length - 1
-    if (i < 0 || i > n) return null
-    var shown = super_list[i][0]
-    if (i == n && main_now == shown) return { u: u_now, shown: shown, u_now: u_now }
-    var u_target
-    if (i == 0) {
-        u_target = Math.floor(u_now) + 1
-    } else {
-        var m = Math.pow(2, 1 - (super_list[i][1] - super_list[i - 1][1] + 1))
-        for (var j = i - 1; j >= 1; j--) {
-            m = (m + 1) / Math.pow(2, super_list[j][1] - super_list[j - 1][1])
-        }
-        u_target = Math.floor(u_now) + 1 - 2 * m
-    }
-    return { u: u_target, shown: shown, u_now: u_now }
+    num_to_lngi(u_now)
+    if (i < 0 || i >= super_list.length) return null
+    return { u: scratch_bar_boundary(i, u_now), shown: scratch_bar_sequence(i) }
 }
 
 // How long the click-to-jump search may spend trying clock steps before it
@@ -350,18 +343,10 @@ scratch_bar_init()
 var super_list = []
 
 
-// The countdown chain traded by ntl() is not capped at a number of bars: it
-// runs until the sequence ends by itself, or until a bar's sequence would have
-// a last term past NTL_MAX_LAST_TERM (the deep region around 3.9 otherwise runs
-// for thousands of bars and each walk costs ~0.2 ms per bar).
-const NTL_MAX_LAST_TERM = 1000
-// The number of bars is bounded the same way, by what the player is counting to:
-// the deepest countdowns live in a sliver of u where the chain jumps straight to
-// sequences with ~1000 terms, and without this they would trade a thousand bars
-// of those. Bounding the rows the same way as the terms keeps the worst
-// countdown at ~200 ms of work in a single frame instead of growing without
-// limit, and every bar still ends before its last term reaches the limit.
-var NTL_MAX_BARS = NTL_MAX_LAST_TERM
+// Include last terms up to and including 2048 in the countdown bars.
+const NTL_MAX_LAST_TERM = 2048
+// Keep the existing row budget independent of the last-term limit.
+var NTL_MAX_BARS = 1000
 
 function ntl(m) {
     super_list = []
