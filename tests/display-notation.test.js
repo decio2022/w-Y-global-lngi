@@ -8,14 +8,17 @@ function select() {
     return { value: 'wY', listeners: {}, addEventListener(event, fn) { this.listeners[event] = fn; } };
 }
 const main = select(), progress = select();
-const context = { document: { getElementById: id => id === 'main_lngi_display_mode' ? main : progress } };
+let refreshes = 0;
+const context = { refresh_main_notation: () => { refreshes++; }, document: { getElementById: id => id === 'main_lngi_display_mode' ? main : progress } };
 vm.createContext(context);
 vm.runInContext(snippet, context);
 main.value = 'cOCF'; main.listeners.input();
 assert.equal(progress.value, 'cOCF');
+assert.equal(refreshes, 1);
 assert.equal(vm.runInContext('scratch_bar_display', context), 'cOCF');
 progress.value = 'EcOCF'; progress.listeners.change();
 assert.equal(main.value, 'EcOCF');
+assert.equal(refreshes, 2);
 assert.equal(vm.runInContext('scratch_bar_display', context), 'EcOCF');
 vm.runInContext("setDisplayNotation('BMS')", context);
 assert.equal(main.value, 'BMS'); assert.equal(progress.value, 'BMS');

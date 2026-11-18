@@ -350,7 +350,8 @@ function jump_to_scratch_bar(i) {
             got = num_time(virtualElapsed + timeOffset)
             if (got[2] == target.shown) {
                 // Redraw straight away instead of waiting for the next frame.
-                setHTML($("main_lngi_Content"), `<i>${main_sequence_label(got[2])}</i>`)
+                current_main_sequence = got[2]
+                refresh_main_notation()
                 document.getElementById("main_lngi_bar").innerHTML = `${got[0]} to next ordinal (${got[1]} left)`
                 return true
             }
@@ -366,7 +367,8 @@ function jump_to_scratch_bar(i) {
     if (bestElapsed !== null && bestTerms * 2 >= want.length) {
         virtualElapsed = bestElapsed
         got = num_time(virtualElapsed + timeOffset)
-        setHTML($("main_lngi_Content"), `<i>${main_sequence_label(got[2])}</i>`)
+        current_main_sequence = got[2]
+        refresh_main_notation()
         document.getElementById("main_lngi_bar").innerHTML = `${got[0]} to next ordinal (${got[1]} left)`
         scratch_bar_blocked(i)
         return false
@@ -589,8 +591,17 @@ renderAnalysisPanels();
 //
 // Callers pass the elapsed time itself (`virtualElapsed + timeOffset`), not
 // `st + elapsed`. The absolute timestamp is only used for display.
+// Match the analysis panels: convert the current raw ω-Y sequence immediately
+// on the main thread. Progress bars still use the worker to avoid converting
+// dozens of labels during a frame.
+var current_main_sequence = null
 function main_sequence_label(sequence) {
-    return scratch_bar_display === "wY" ? sequence : progress_bar_label(sequence, scratch_bar_display)
+    return scratch_bar_display === "wY" ? `<i>${sequence}</i>` : convert_From_wY(sequence, scratch_bar_display)
+}
+function refresh_main_notation() {
+    if (current_main_sequence !== null) {
+        setHTML($("main_lngi_Content"), main_sequence_label(current_main_sequence))
+    }
 }
 
 function num_time(t,update_main_bar=true) {
@@ -602,9 +613,8 @@ function num_time(t,update_main_bar=true) {
         var j = num_to_lngi(u)
         if (update_main_bar) {
 
-            // Give the main display first choice of the background worker. The
-            // underlying sequence, calculations, and tracker remain in ω-Y.
-            setHTML($("main_lngi_Content"), `<i>${main_sequence_label(j[0])}</i>`)
+            current_main_sequence = j[0]
+            refresh_main_notation()
             document.getElementById("main_lngi_bar").style.width = `${(1 - j[1]) * 100}%`
             update_scratch_bars(u, t)
 

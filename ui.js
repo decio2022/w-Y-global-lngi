@@ -31,6 +31,7 @@ function setDisplayNotation(value) {
     scratch_bar_display = value;
     scratch_bar_display_div.value = value;
     main_lngi_display_div.value = value;
+    if (typeof refresh_main_notation === "function") refresh_main_notation();
 }
 for (const select of [scratch_bar_display_div, main_lngi_display_div]) {
     select.addEventListener("input", () => setDisplayNotation(select.value));
