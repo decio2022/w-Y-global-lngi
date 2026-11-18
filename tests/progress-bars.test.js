@@ -26,11 +26,11 @@ vm.runInContext(code, context);
 function chain(n) { context.super_list = Array.from({ length: n }, (_, i) => [`ord${i}`, i, 0.5]); }
 chain(100);
 context.update_scratch_bars(1, 0);
-assert.equal(elements.length, 53);
-assert.equal(conversions.length, 53);
-assert.equal(elements[0]._label.innerHTML, 'ord47');
-assert.equal(elements[52]._label.innerHTML, 'ord99,1');
-elements[0].click(); assert.equal(clicked, 47);
+assert.equal(elements.length, 40);
+assert.equal(conversions.length, 40);
+assert.equal(elements[0]._label.innerHTML, 'ord60');
+assert.equal(elements[39]._label.innerHTML, 'ord99,1');
+elements[0].click(); assert.equal(clicked, 60);
 limit.checked = false; conversions = [];
 context.update_scratch_bars(1, 0);
 assert.equal(elements.length, 100); assert.equal(conversions.length, 100);

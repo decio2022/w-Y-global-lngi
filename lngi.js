@@ -204,7 +204,7 @@ function update_scratch_bars(x, currentSimulatedTime) {
     if (page != 1) return
 
     const limit = document.getElementById("limit_scratch_bars").checked
-    const start = limit ? Math.max(0, super_list.length - 53) : 0
+    const start = limit ? Math.max(0, super_list.length - 40) : 0
     const count = super_list.length - start
     scratch_bar_ensure(count)
     scratch_bar_count = count
