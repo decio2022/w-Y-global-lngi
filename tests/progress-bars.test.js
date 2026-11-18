@@ -16,7 +16,8 @@ const context = {
         getElementById(id) { return id === 'scratch_content' ? { appendChild(el) { elements.push(el); } } : limit; },
         createElement: element, createTextNode: () => ({})
     },
-    page: 1, scratch_bar_display: 'wY', tt: 0,
+    page: 1, scratch_bar_display: 'wY', tt: 0, paused: true,
+    isPaused: () => context.paused,
     get_time_inv: x => x * 1000, formatSeconds: String,
     convert_From_wY: (s, mode) => { conversions.push([s, mode]); return s; },
     jump_to_scratch_bar: i => { clicked = i; }
@@ -27,17 +28,17 @@ function chain(n) { context.super_list = Array.from({ length: n }, (_, i) => [`o
 chain(100);
 context.update_scratch_bars(1, 0);
 assert.equal(elements.length, 40);
-assert.equal(conversions.length, 40);
+assert.equal(conversions.length, 0);
 assert.equal(elements[0]._label.innerHTML, 'ord60');
 assert.equal(elements[39]._label.innerHTML, 'ord99,1');
 elements[0].click(); assert.equal(clicked, 60);
 limit.checked = false; conversions = [];
 context.update_scratch_bars(1, 0);
-assert.equal(elements.length, 100); assert.equal(conversions.length, 100);
+assert.equal(elements.length, 100); assert.equal(conversions.length, 0);
 elements[0].click(); assert.equal(clicked, 0);
 limit.checked = true; chain(10); conversions = [];
 context.update_scratch_bars(1, 0);
-assert.equal(conversions.length, 10); assert.equal(elements[10].style.display, 'none');
+assert.equal(conversions.length, 0); assert.equal(elements[10].style.display, 'none');
 assert.equal(elements[9]._label.innerHTML, 'ord9,1');
 context.page = 0; conversions = [];
 context.update_scratch_bars(1, 0);
@@ -60,6 +61,11 @@ context.compress_BMS = { checked: false };
 context.format_cOCF = { checked: true };
 context.page = 1; context.scratch_bar_display = 'cOCF'; chain(100);
 conversions = [];
+context.paused = false;
+context.update_scratch_bars(1, 0);
+assert.equal(worker, undefined);
+assert.equal(elements[0]._label.innerHTML, 'ord60');
+context.paused = true;
 context.update_scratch_bars(1, 0);
 context.update_scratch_bars(1, 0);
 assert.equal(conversions.length, 0);
@@ -68,6 +74,10 @@ assert.equal(worker.requests[0].ord, 'ord60');
 worker.onmessage({ data: { key: worker.requests[0].key, label: 'converted' } });
 context.update_scratch_bars(1, 0);
 assert.equal(elements[0]._label.innerHTML, 'converted');
+context.paused = false;
+context.update_scratch_bars(1, 0);
+assert.equal(elements[0]._label.innerHTML, 'ord60');
+context.paused = true;
 assert.equal(worker.requests.length, 2);
 assert.equal(worker.requests[1].ord, 'ord61');
 // A late result for a previous chain is cached but never applied to a new bar.
@@ -75,4 +85,15 @@ chain(10);
 worker.onmessage({ data: { key: worker.requests[1].key, label: 'stale' } });
 context.update_scratch_bars(1, 0);
 assert.equal(elements[1]._label.innerHTML, 'ord1');
+// The main display follows the selected notation without changing the source.
+const mainFunction = source.slice(source.indexOf('function main_sequence_label('), source.indexOf('function num_time('));
+vm.runInContext(mainFunction, context);
+context.scratch_bar_display = 'wY';
+assert.equal(context.main_sequence_label('1,2,3'), '1,2,3');
+context.scratch_bar_display = 'cOCF';
+cache.set('cOCF:1,2,3', 'converted main');
+assert.equal(context.main_sequence_label('1,2,3'), 'converted main');
+context.scratch_bar_display = 'BMS';
+cache.set('BMS:1,2,3', 'BMS main');
+assert.equal(context.main_sequence_label('1,2,3'), 'BMS main');
 console.log('Progress bar tests passed');

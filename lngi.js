@@ -195,16 +195,15 @@ function scratch_bar_boundary(i, x) {
     return x + remaining * 2 ** (1 - steps)
 }
 
-// OCF conversions can take longer than a frame even for a single label. Keep
+// Notation conversions can take longer than a frame even for a single label. Keep
 // just one worker request in flight; the next frame chooses from the current
 // bars, so scrolling/time/setting changes cannot build an obsolete backlog.
 var progress_conversion_worker = null
 var progress_conversion_pending = false
 var progress_conversion_unavailable = false
-const progress_ocf_modes = new Set(["2-shifted OCF", "cOCF", "EcOCF", "BcOCF"])
 
 function progress_bar_label(ord, mode) {
-    if (!progress_ocf_modes.has(mode)) return convert_From_wY(ord, mode)
+    if (mode === "wY") return ord
     const key = convert_cache_key(ord, mode)
     const cached = convert_cache.get(key)
     if (cached !== undefined) return cached
@@ -264,7 +263,8 @@ function update_scratch_bars(x, currentSimulatedTime) {
         const secondsLeft = i === last ? lt : Math.max(0,
             (get_time_inv(scratch_bar_boundary(i, x)) - currentSimulatedTime) / 1000)
         const ordText = scratch_bar_sequence(i)
-        const label = progress_bar_label(ordText, scratch_bar_display)
+        const label = isPaused() && scratch_bar_display !== "wY"
+            ? progress_bar_label(ordText, scratch_bar_display) : ordText
         if (label !== scratch_bar_label_cache[slot]) {
             scratch_bar_label_cache[slot] = label
             bar._label.innerHTML = label
@@ -350,7 +350,7 @@ function jump_to_scratch_bar(i) {
             got = num_time(virtualElapsed + timeOffset)
             if (got[2] == target.shown) {
                 // Redraw straight away instead of waiting for the next frame.
-                document.getElementById("main_lngi_Content").innerHTML = `<i>${got[2]}</i>`
+                setHTML($("main_lngi_Content"), `<i>${main_sequence_label(got[2])}</i>`)
                 document.getElementById("main_lngi_bar").innerHTML = `${got[0]} to next ordinal (${got[1]} left)`
                 return true
             }
@@ -366,7 +366,7 @@ function jump_to_scratch_bar(i) {
     if (bestElapsed !== null && bestTerms * 2 >= want.length) {
         virtualElapsed = bestElapsed
         got = num_time(virtualElapsed + timeOffset)
-        document.getElementById("main_lngi_Content").innerHTML = `<i>${got[2]}</i>`
+        setHTML($("main_lngi_Content"), `<i>${main_sequence_label(got[2])}</i>`)
         document.getElementById("main_lngi_bar").innerHTML = `${got[0]} to next ordinal (${got[1]} left)`
         scratch_bar_blocked(i)
         return false
@@ -589,6 +589,10 @@ renderAnalysisPanels();
 //
 // Callers pass the elapsed time itself (`virtualElapsed + timeOffset`), not
 // `st + elapsed`. The absolute timestamp is only used for display.
+function main_sequence_label(sequence) {
+    return scratch_bar_display === "wY" ? sequence : progress_bar_label(sequence, scratch_bar_display)
+}
+
 function num_time(t,update_main_bar=true) {
     var t_elapsed = Math.max(0, t)
     if (t_elapsed == 0) {
@@ -598,6 +602,9 @@ function num_time(t,update_main_bar=true) {
         var j = num_to_lngi(u)
         if (update_main_bar) {
 
+            // Give the main display first choice of the background worker. The
+            // underlying sequence, calculations, and tracker remain in ω-Y.
+            setHTML($("main_lngi_Content"), `<i>${main_sequence_label(j[0])}</i>`)
             document.getElementById("main_lngi_bar").style.width = `${(1 - j[1]) * 100}%`
             update_scratch_bars(u, t)
 
@@ -732,7 +739,6 @@ function update() {
         }
     }
 
-    setHTML($("main_lngi_Content"), `<i>${u[2]}</i>`)
     // Feed the displayed sequence to the Highest terms tracker (runs on every
     // tab, so records are kept even while the tab is closed). The rewind check
     // has to run first: it drops records from a future the player jumped back
