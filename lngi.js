@@ -195,6 +195,52 @@ function scratch_bar_boundary(i, x) {
     return x + remaining * 2 ** (1 - steps)
 }
 
+// OCF conversions can take longer than a frame even for a single label. Keep
+// just one worker request in flight; the next frame chooses from the current
+// bars, so scrolling/time/setting changes cannot build an obsolete backlog.
+var progress_conversion_worker = null
+var progress_conversion_pending = false
+var progress_conversion_unavailable = false
+const progress_ocf_modes = new Set(["2-shifted OCF", "cOCF", "EcOCF", "BcOCF"])
+
+function progress_bar_label(ord, mode) {
+    if (!progress_ocf_modes.has(mode)) return convert_From_wY(ord, mode)
+    const key = convert_cache_key(ord, mode)
+    const cached = convert_cache.get(key)
+    if (cached !== undefined) return cached
+    if (!progress_conversion_worker && !progress_conversion_unavailable) {
+        try {
+            progress_conversion_worker = new Worker("progress-conversion-worker.js")
+            progress_conversion_worker.onmessage = ({ data }) => {
+                convert_cache_put(data.key, data.label)
+                progress_conversion_pending = false
+            }
+            progress_conversion_worker.onerror = error => {
+                console.warn("Progress bar conversion worker failed; showing ω-Y labels.", error)
+                progress_conversion_worker.terminate()
+                progress_conversion_worker = null
+                progress_conversion_pending = false
+                progress_conversion_unavailable = true
+            }
+        } catch (error) {
+            console.warn("Progress bar conversion worker unavailable; showing ω-Y labels.", error)
+            progress_conversion_unavailable = true
+        }
+    }
+    if (progress_conversion_worker && !progress_conversion_pending) {
+        progress_conversion_pending = true
+        progress_conversion_worker.postMessage({
+            key, ord, mode,
+            settings: {
+                yTerms: Y_Terms.valueAsNumber, bmsTerms: BMS_Terms.valueAsNumber,
+                compress: compress_BMS.checked, format: format_cOCF.checked
+            }
+        })
+    }
+    // Show the correct raw sequence while its notation is being calculated.
+    return ord
+}
+
 function update_scratch_bars(x, currentSimulatedTime) {
     // The final countdown controls the main bar even outside the progress page.
     const last = super_list.length - 1
@@ -218,7 +264,7 @@ function update_scratch_bars(x, currentSimulatedTime) {
         const secondsLeft = i === last ? lt : Math.max(0,
             (get_time_inv(scratch_bar_boundary(i, x)) - currentSimulatedTime) / 1000)
         const ordText = scratch_bar_sequence(i)
-        const label = convert_From_wY(ordText, scratch_bar_display)
+        const label = progress_bar_label(ordText, scratch_bar_display)
         if (label !== scratch_bar_label_cache[slot]) {
             scratch_bar_label_cache[slot] = label
             bar._label.innerHTML = label
@@ -353,7 +399,7 @@ function ntl(m) {
     // the closing pop below must not run again.
     var finished = false
     while (super_list.length < NTL_MAX_BARS) {
-        super_list = super_list.concat([[ord, steps, m]])
+        super_list.push([ord, steps, m])
         if (m <= 1e-14) {
             break
         }
@@ -393,9 +439,16 @@ function ntl(m) {
     return [ord, m, exp]
 }
 
+// The timeline often maps many consecutive animation frames to the exact same
+// floating-point value. Reuse the chain in that case instead of rebuilding it.
+var last_num_to_lngi_input = null
+var last_num_to_lngi_result = null
 function num_to_lngi(m) {
-    var m = m - m % 1 + 0.5 + 0.5 * (m % 1)
-    return ntl(m)
+    if (m === last_num_to_lngi_input) return last_num_to_lngi_result
+    const mapped = m - m % 1 + 0.5 + 0.5 * (m % 1)
+    last_num_to_lngi_result = ntl(mapped)
+    last_num_to_lngi_input = m
+    return last_num_to_lngi_result
 }
 
 const LNGI_DAY_MS = 24 * 60 * 60 * 1000;
@@ -716,7 +769,11 @@ function update() {
     
     document.title = `ω-Y LNGI: <${super_list.slice(0, 6).at(-1)[0]}`
 
-    update_milestones(mpage)
+    // Milestone timers do not need a full layout/render on every frame.
+    if (page == 4 && (!update._lastMilestoneUpdate || now - update._lastMilestoneUpdate >= 250)) {
+        update._lastMilestoneUpdate = now
+        update_milestones(mpage)
+    }
 
     if (tps>1) player_time = virtualElapsed
     if (player_time == NaN) {

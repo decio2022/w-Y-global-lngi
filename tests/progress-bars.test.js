@@ -16,7 +16,7 @@ const context = {
         getElementById(id) { return id === 'scratch_content' ? { appendChild(el) { elements.push(el); } } : limit; },
         createElement: element, createTextNode: () => ({})
     },
-    page: 1, scratch_bar_display: 'cOCF', tt: 0,
+    page: 1, scratch_bar_display: 'wY', tt: 0,
     get_time_inv: x => x * 1000, formatSeconds: String,
     convert_From_wY: (s, mode) => { conversions.push([s, mode]); return s; },
     jump_to_scratch_bar: i => { clicked = i; }
@@ -42,4 +42,37 @@ assert.equal(elements[9]._label.innerHTML, 'ord9,1');
 context.page = 0; conversions = [];
 context.update_scratch_bars(1, 0);
 assert.equal(conversions.length, 0); assert.ok(context.lt >= 0);
+// OCF labels must not synchronously convert on the animation thread, and the
+// worker must have at most one outstanding request even across many frames.
+const cache = new Map();
+let worker;
+context.Worker = class {
+    constructor() { worker = this; this.requests = []; }
+    postMessage(message) { this.requests.push(message); }
+    terminate() {}
+};
+context.convert_cache = cache;
+context.convert_cache_key = (ord, mode) => `${mode}:${ord}`;
+context.convert_cache_put = (key, value) => cache.set(key, value);
+context.Y_Terms = { valueAsNumber: 16 };
+context.BMS_Terms = { valueAsNumber: 16 };
+context.compress_BMS = { checked: false };
+context.format_cOCF = { checked: true };
+context.page = 1; context.scratch_bar_display = 'cOCF'; chain(100);
+conversions = [];
+context.update_scratch_bars(1, 0);
+context.update_scratch_bars(1, 0);
+assert.equal(conversions.length, 0);
+assert.equal(worker.requests.length, 1);
+assert.equal(worker.requests[0].ord, 'ord60');
+worker.onmessage({ data: { key: worker.requests[0].key, label: 'converted' } });
+context.update_scratch_bars(1, 0);
+assert.equal(elements[0]._label.innerHTML, 'converted');
+assert.equal(worker.requests.length, 2);
+assert.equal(worker.requests[1].ord, 'ord61');
+// A late result for a previous chain is cached but never applied to a new bar.
+chain(10);
+worker.onmessage({ data: { key: worker.requests[1].key, label: 'stale' } });
+context.update_scratch_bars(1, 0);
+assert.equal(elements[1]._label.innerHTML, 'ord1');
 console.log('Progress bar tests passed');
