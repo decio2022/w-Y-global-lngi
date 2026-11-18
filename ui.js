@@ -28,6 +28,11 @@ const main_lngi_display_div = document.getElementById("main_lngi_display_mode");
 
 // Both controls select the same display notation; the underlying LNGI stays ω-Y.
 function setDisplayNotation(value) {
+    if (value !== scratch_bar_display) {
+        // A manual resize applies until the notation changes; then let the
+        // container fit the newly converted content again.
+        document.getElementById("main_lngi").style.height = "";
+    }
     scratch_bar_display = value;
     scratch_bar_display_div.value = value;
     main_lngi_display_div.value = value;

@@ -137,7 +137,8 @@ h2 {
     overflow: auto;
 
     min-height: 60px;
-    height: 60px;
+    height: auto;
+    padding-bottom: 20px; /* Leave room for the resize handle. */
 }
 
 #main_lngi_Content {
