@@ -47,6 +47,23 @@
         </div>
     </div>
 
+    <div class="header-row">
+        <label for="main_lngi_display_mode">Main LNGI notation:
+            <select id="main_lngi_display_mode">
+                <option value="wY">ω-Y sequence</option>
+                <option value="DBMS">DBMS</option>
+                <option value="BMS">BMS</option>
+                <option value="2-shifted OCF">2-shifted OCF</option>
+                <option value="cOCF">cOCF</option>
+                <option value="EcOCF">Extended cOCF</option>
+                <option value="BcOCF">Buffed cOCF</option>
+                <option value="PMS">PMS</option>
+                <option value="AMS">AMS</option>
+                <option value="0Y">0-Y</option>
+                <option value="Vulcaniz">Vulcaniz</option>
+            </select>
+        </label>
+    </div>
     <div class="card resizable" id="main_lngi">
         <div id="main_lngi_Content">Loading main sequence...</div>
         <div class="resize-handle"></div>
@@ -70,7 +87,7 @@
 
         <div class="header-row">
             <label for="scratch_bar_display_mode">
-                Notation on milestone bar :
+                Display notation :
             </label>
 
             <select id="scratch_bar_display_mode">
@@ -88,6 +105,15 @@
                     <option value="Vulcaniz">Vulcaniz</option>
                 </div>
             </select>
+        </div>
+        <div class="header-row">
+            <small>The main sequence uses this notation. Progress bars show ω-Y while running and convert in the background when paused.</small>
+        </div>
+        <div class="header-row">
+            <label for="limit_scratch_bars">
+                <input type="checkbox" id="limit_scratch_bars">
+                Show only the last 40 progress bars (reduces notation lag)
+            </label>
         </div>
 
     </div>

@@ -123,8 +123,8 @@ function setValue(el, value) {
 // The bars are not capped at a fixed count: the chain a countdown walks through
 // can be hundreds of bars long (see ntl), so bars are created in chunks as a
 // countdown needs them and hidden again when it no longer does. The array
-// always holds `scratch_bar_created` bars; [0, scratch_bar_count) is the part
-// the current countdown fills.
+// always holds `scratch_bar_created` reusable display slots. A slot can map to
+// a different countdown index when only the last bars are displayed.
 var scratch_bar_elements = []
 var scratch_bar_count = 0
 var scratch_bar_created = 0
@@ -149,7 +149,7 @@ function scratch_bar_ensure(n) {
         p.appendChild(p._label)
         p.appendChild(document.createTextNode(" "))
         p.appendChild(p._meta)
-        p.addEventListener("click", () => jump_to_scratch_bar(i))
+        p.addEventListener("click", () => jump_to_scratch_bar(p._sequenceIndex))
         content.appendChild(p)
         scratch_bar_elements[i] = p
     }
@@ -158,7 +158,7 @@ function scratch_bar_ensure(n) {
 function hide_scratch_bar(index) {
     const bar = scratch_bar_elements[index]
     if (bar) {
-        if (bar.style.visibility !== "hidden") bar.style.visibility = "hidden"
+        if (bar.style.display !== "none") bar.style.display = "none"
         scratch_bar_label_cache[index] = undefined
         scratch_bar_meta_cache[index] = undefined
     }
@@ -195,54 +195,95 @@ function scratch_bar_boundary(i, x) {
     return x + remaining * 2 ** (1 - steps)
 }
 
-function update_scratch_bars(x, currentSimulatedTime) {
-    // One bar per entry of the chain: the whole countdown is shown, however many
-    // bars it takes. Bars past the end are hidden, and bars left over from a
-    // longer countdown are hidden too.
-    scratch_bar_ensure(super_list.length)
-    scratch_bar_count = super_list.length
-    for (var i = super_list.length; i < scratch_bar_created; i++) {
-        hide_scratch_bar(i)
+// Notation conversions can take longer than a frame even for a single label. Keep
+// just one worker request in flight; the next frame chooses from the current
+// bars, so scrolling/time/setting changes cannot build an obsolete backlog.
+var progress_conversion_worker = null
+var progress_conversion_pending = false
+var progress_conversion_unavailable = false
+
+function progress_bar_label(ord, mode) {
+    if (mode === "wY") return ord
+    const key = convert_cache_key(ord, mode)
+    const cached = convert_cache.get(key)
+    if (cached !== undefined) return cached
+    if (!progress_conversion_worker && !progress_conversion_unavailable) {
+        try {
+            progress_conversion_worker = new Worker("progress-conversion-worker.js")
+            progress_conversion_worker.onmessage = ({ data }) => {
+                convert_cache_put(data.key, data.label)
+                progress_conversion_pending = false
+            }
+            progress_conversion_worker.onerror = error => {
+                console.warn("Progress bar conversion worker failed; showing ω-Y labels.", error)
+                progress_conversion_worker.terminate()
+                progress_conversion_worker = null
+                progress_conversion_pending = false
+                progress_conversion_unavailable = true
+            }
+        } catch (error) {
+            console.warn("Progress bar conversion worker unavailable; showing ω-Y labels.", error)
+            progress_conversion_unavailable = true
+        }
     }
-    for (var i = 0; i < super_list.length; i++) {
-        const bar = scratch_bar_elements[i]
-        var u = scratch_bar_boundary(i, x)
-        var t = get_time_inv(u)
-        // `currentSimulatedTime` is an elapsed time (see num_time), so the
-        // target has to be an elapsed time too — adding `st` here made every
-        // bar show "0 seconds left".
-        const secondsLeft = Math.max(0, (t - currentSimulatedTime) / 1000);
-
-        if (page == 1) {
-            if (bar.style.visibility !== "visible") bar.style.visibility = "visible"
-
-            const ordText = scratch_bar_sequence(i)
-            // Convert instantly: no budget, no waiting for the next frame.
-            // convert_From_wY() is memoized, so repeat frames are cache hits.
-            const label = convert_From_wY(ordText, scratch_bar_display)
-            if (label !== scratch_bar_label_cache[i]) {
-                scratch_bar_label_cache[i] = label
-                bar._label.innerHTML = label
+    if (progress_conversion_worker && !progress_conversion_pending) {
+        progress_conversion_pending = true
+        progress_conversion_worker.postMessage({
+            key, ord, mode,
+            settings: {
+                yTerms: Y_Terms.valueAsNumber, bmsTerms: BMS_Terms.valueAsNumber,
+                compress: compress_BMS.checked, format: format_cOCF.checked
             }
+        })
+    }
+    // Show the correct raw sequence while its notation is being calculated.
+    return ord
+}
 
-            const percent = (1 - super_list[i][2]) * 100
-            const metaText =
-                `(${percent.toFixed(2)}% / ` +
-                (tt == 0 ? `${formatSeconds(secondsLeft)} left / ${(secondsLeft * 1000)}` : `in ${new Date(secondsLeft * 1000 + currentSimulatedTime).toLocaleString()}`) +
-                `)`
-            if (metaText !== scratch_bar_meta_cache[i]) {
-                scratch_bar_meta_cache[i] = metaText
-                bar._meta.textContent = metaText
-            }
+function update_scratch_bars(x, currentSimulatedTime) {
+    // The final countdown controls the main bar even outside the progress page.
+    const last = super_list.length - 1
+    if (last >= 0) {
+        lt = Math.max(0, (get_time_inv(scratch_bar_boundary(last, x)) - currentSimulatedTime) / 1000)
+    }
+    if (page != 1) return
 
-            const bg = `hsl(${super_list[i][1] * 10},100%,90%)`
-            if (bar.style.backgroundColor !== bg) bar.style.backgroundColor = bg
-            const w = `${percent}%`
-            if (bar.style.width !== w) bar.style.width = w
+    const limit = document.getElementById("limit_scratch_bars").checked
+    const start = limit ? Math.max(0, super_list.length - 40) : 0
+    const count = super_list.length - start
+    scratch_bar_ensure(count)
+    scratch_bar_count = count
+    for (let slot = count; slot < scratch_bar_created; slot++) hide_scratch_bar(slot)
+
+    for (let slot = 0; slot < count; slot++) {
+        const i = start + slot
+        const bar = scratch_bar_elements[slot]
+        bar._sequenceIndex = i
+        if (bar.style.display === "none") bar.style.display = ""
+        const secondsLeft = i === last ? lt : Math.max(0,
+            (get_time_inv(scratch_bar_boundary(i, x)) - currentSimulatedTime) / 1000)
+        const ordText = scratch_bar_sequence(i)
+        const label = isPaused() && scratch_bar_display !== "wY"
+            ? progress_bar_label(ordText, scratch_bar_display) : ordText
+        if (label !== scratch_bar_label_cache[slot]) {
+            scratch_bar_label_cache[slot] = label
+            bar._label.innerHTML = label
         }
-        if (i + 1 == super_list.length) {
-            lt = secondsLeft
+
+        const percent = (1 - super_list[i][2]) * 100
+        const metaText =
+            `(${percent.toFixed(2)}% / ` +
+            (tt == 0 ? `${formatSeconds(secondsLeft)} left / ${(secondsLeft * 1000)}` : `in ${new Date(secondsLeft * 1000 + currentSimulatedTime).toLocaleString()}`) +
+            `)`
+        if (metaText !== scratch_bar_meta_cache[slot]) {
+            scratch_bar_meta_cache[slot] = metaText
+            bar._meta.textContent = metaText
         }
+
+        const bg = `hsl(${super_list[i][1] * 10},100%,90%)`
+        if (bar.style.backgroundColor !== bg) bar.style.backgroundColor = bg
+        const w = `${percent}%`
+        if (bar.style.width !== w) bar.style.width = w
     }
 }
 
@@ -309,7 +350,8 @@ function jump_to_scratch_bar(i) {
             got = num_time(virtualElapsed + timeOffset)
             if (got[2] == target.shown) {
                 // Redraw straight away instead of waiting for the next frame.
-                document.getElementById("main_lngi_Content").innerHTML = `<i>${got[2]}</i>`
+                current_main_sequence = got[2]
+                refresh_main_notation()
                 document.getElementById("main_lngi_bar").innerHTML = `${got[0]} to next ordinal (${got[1]} left)`
                 return true
             }
@@ -325,7 +367,8 @@ function jump_to_scratch_bar(i) {
     if (bestElapsed !== null && bestTerms * 2 >= want.length) {
         virtualElapsed = bestElapsed
         got = num_time(virtualElapsed + timeOffset)
-        document.getElementById("main_lngi_Content").innerHTML = `<i>${got[2]}</i>`
+        current_main_sequence = got[2]
+        refresh_main_notation()
         document.getElementById("main_lngi_bar").innerHTML = `${got[0]} to next ordinal (${got[1]} left)`
         scratch_bar_blocked(i)
         return false
@@ -358,7 +401,7 @@ function ntl(m) {
     // the closing pop below must not run again.
     var finished = false
     while (super_list.length < NTL_MAX_BARS) {
-        super_list = super_list.concat([[ord, steps, m]])
+        super_list.push([ord, steps, m])
         if (m <= 1e-14) {
             break
         }
@@ -398,9 +441,16 @@ function ntl(m) {
     return [ord, m, exp]
 }
 
+// The timeline often maps many consecutive animation frames to the exact same
+// floating-point value. Reuse the chain in that case instead of rebuilding it.
+var last_num_to_lngi_input = null
+var last_num_to_lngi_result = null
 function num_to_lngi(m) {
-    var m = m - m % 1 + 0.5 + 0.5 * (m % 1)
-    return ntl(m)
+    if (m === last_num_to_lngi_input) return last_num_to_lngi_result
+    const mapped = m - m % 1 + 0.5 + 0.5 * (m % 1)
+    last_num_to_lngi_result = ntl(mapped)
+    last_num_to_lngi_input = m
+    return last_num_to_lngi_result
 }
 
 const LNGI_DAY_MS = 24 * 60 * 60 * 1000;
@@ -541,6 +591,19 @@ renderAnalysisPanels();
 //
 // Callers pass the elapsed time itself (`virtualElapsed + timeOffset`), not
 // `st + elapsed`. The absolute timestamp is only used for display.
+// Match the analysis panels: convert the current raw ω-Y sequence immediately
+// on the main thread. Progress bars still use the worker to avoid converting
+// dozens of labels during a frame.
+var current_main_sequence = null
+function main_sequence_label(sequence) {
+    return scratch_bar_display === "wY" ? `<i>${sequence}</i>` : convert_From_wY(sequence, scratch_bar_display)
+}
+function refresh_main_notation() {
+    if (current_main_sequence !== null) {
+        setHTML($("main_lngi_Content"), main_sequence_label(current_main_sequence))
+    }
+}
+
 function num_time(t,update_main_bar=true) {
     var t_elapsed = Math.max(0, t)
     if (t_elapsed == 0) {
@@ -550,6 +613,8 @@ function num_time(t,update_main_bar=true) {
         var j = num_to_lngi(u)
         if (update_main_bar) {
 
+            current_main_sequence = j[0]
+            refresh_main_notation()
             document.getElementById("main_lngi_bar").style.width = `${(1 - j[1]) * 100}%`
             update_scratch_bars(u, t)
 
@@ -684,7 +749,6 @@ function update() {
         }
     }
 
-    setHTML($("main_lngi_Content"), `<i>${u[2]}</i>`)
     // Feed the displayed sequence to the Highest terms tracker (runs on every
     // tab, so records are kept even while the tab is closed). The rewind check
     // has to run first: it drops records from a future the player jumped back
@@ -721,7 +785,11 @@ function update() {
     
     document.title = `ω-Y LNGI: <${super_list.slice(0, 6).at(-1)[0]}`
 
-    update_milestones(mpage)
+    // Milestone timers do not need a full layout/render on every frame.
+    if (page == 4 && (!update._lastMilestoneUpdate || now - update._lastMilestoneUpdate >= 250)) {
+        update._lastMilestoneUpdate = now
+        update_milestones(mpage)
+    }
 
     if (tps>1) player_time = virtualElapsed
     if (player_time == NaN) {

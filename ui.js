@@ -24,10 +24,24 @@ document.addEventListener("keydown", (e) => {
 
 let scratch_bar_display = 'wY'
 const scratch_bar_display_div = document.getElementById("scratch_bar_display_mode");
+const main_lngi_display_div = document.getElementById("main_lngi_display_mode");
 
-scratch_bar_display_div.addEventListener("change", () => {
-    scratch_bar_display = scratch_bar_display_div.value
-});
+// Both controls select the same display notation; the underlying LNGI stays ω-Y.
+function setDisplayNotation(value) {
+    if (value !== scratch_bar_display) {
+        // A manual resize applies until the notation changes; then let the
+        // container fit the newly converted content again.
+        document.getElementById("main_lngi").style.height = "";
+    }
+    scratch_bar_display = value;
+    scratch_bar_display_div.value = value;
+    main_lngi_display_div.value = value;
+    if (typeof refresh_main_notation === "function") refresh_main_notation();
+}
+for (const select of [scratch_bar_display_div, main_lngi_display_div]) {
+    select.addEventListener("input", () => setDisplayNotation(select.value));
+    select.addEventListener("change", () => setDisplayNotation(select.value));
+}
 
 
 let compress_BMS = document.getElementById("compress_bms")
@@ -199,7 +213,9 @@ function saveAllSettings() {
         BMS_Terms: Number(document.getElementById("BMS_Terms").value),
 
         // Milestone Settings
+        scratch_bar_display_mode: scratch_bar_display,
         Scratch_bar_height: Number(document.getElementById("Scratch_bar_height").value),
+        limit_scratch_bars: document.getElementById("limit_scratch_bars").checked,
 
         // Visualizer (Mountain) Settings - Sizing
         ROWHEIGHT: Number(document.getElementById("ROWHEIGHT").value),
@@ -267,7 +283,11 @@ function loadAllSettings() {
         setCheck("format_cOCF", settings.format_cOCF);
         setVal("Y_Terms", settings.Y_Terms);
         setVal("BMS_Terms", settings.BMS_Terms);
+        if (settings.scratch_bar_display_mode !== undefined) {
+            setDisplayNotation(settings.scratch_bar_display_mode);
+        }
         setVal("Scratch_bar_height", settings.Scratch_bar_height);
+        setCheck("limit_scratch_bars", settings.limit_scratch_bars);
         setVal("ROWHEIGHT", settings.ROWHEIGHT);
         setVal("COLUMNWIDTH", settings.COLUMNWIDTH);
         setVal("LINETHICKNESS", settings.LINETHICKNESS);
@@ -295,7 +315,7 @@ function loadAllSettings() {
 function attachAutoSaveListeners() {
     const selectorIds = [
         "font_family", "font_size", "compress_bms", "format_cOCF",
-        "Y_Terms", "BMS_Terms", "Scratch_bar_height", 
+        "Y_Terms", "BMS_Terms", "Scratch_bar_height", "limit_scratch_bars", "scratch_bar_display_mode", "main_lngi_display_mode",
         "ROWHEIGHT", "COLUMNWIDTH", "LINETHICKNESS", "NUMBERSIZE", "NUMBERTHICKNESS",
         "MAXDIMENSIONS", "MaxTerms", "STACKMODE", "HIGHLIGHT", "EXTRADIVIDER", "_UPDATEMODE"
     ];
