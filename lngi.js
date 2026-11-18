@@ -123,8 +123,8 @@ function setValue(el, value) {
 // The bars are not capped at a fixed count: the chain a countdown walks through
 // can be hundreds of bars long (see ntl), so bars are created in chunks as a
 // countdown needs them and hidden again when it no longer does. The array
-// always holds `scratch_bar_created` bars; [0, scratch_bar_count) is the part
-// the current countdown fills.
+// always holds `scratch_bar_created` reusable display slots. A slot can map to
+// a different countdown index when only the last bars are displayed.
 var scratch_bar_elements = []
 var scratch_bar_count = 0
 var scratch_bar_created = 0
@@ -149,7 +149,7 @@ function scratch_bar_ensure(n) {
         p.appendChild(p._label)
         p.appendChild(document.createTextNode(" "))
         p.appendChild(p._meta)
-        p.addEventListener("click", () => jump_to_scratch_bar(i))
+        p.addEventListener("click", () => jump_to_scratch_bar(p._sequenceIndex))
         content.appendChild(p)
         scratch_bar_elements[i] = p
     }
@@ -158,7 +158,7 @@ function scratch_bar_ensure(n) {
 function hide_scratch_bar(index) {
     const bar = scratch_bar_elements[index]
     if (bar) {
-        if (bar.style.visibility !== "hidden") bar.style.visibility = "hidden"
+        if (bar.style.display !== "none") bar.style.display = "none"
         scratch_bar_label_cache[index] = undefined
         scratch_bar_meta_cache[index] = undefined
     }
@@ -196,53 +196,48 @@ function scratch_bar_boundary(i, x) {
 }
 
 function update_scratch_bars(x, currentSimulatedTime) {
-    // One bar per entry of the chain: the whole countdown is shown, however many
-    // bars it takes. Bars past the end are hidden, and bars left over from a
-    // longer countdown are hidden too.
-    scratch_bar_ensure(super_list.length)
-    scratch_bar_count = super_list.length
-    for (var i = super_list.length; i < scratch_bar_created; i++) {
-        hide_scratch_bar(i)
+    // The final countdown controls the main bar even outside the progress page.
+    const last = super_list.length - 1
+    if (last >= 0) {
+        lt = Math.max(0, (get_time_inv(scratch_bar_boundary(last, x)) - currentSimulatedTime) / 1000)
     }
-    for (var i = 0; i < super_list.length; i++) {
-        const bar = scratch_bar_elements[i]
-        var u = scratch_bar_boundary(i, x)
-        var t = get_time_inv(u)
-        // `currentSimulatedTime` is an elapsed time (see num_time), so the
-        // target has to be an elapsed time too — adding `st` here made every
-        // bar show "0 seconds left".
-        const secondsLeft = Math.max(0, (t - currentSimulatedTime) / 1000);
+    if (page != 1) return
 
-        if (page == 1) {
-            if (bar.style.visibility !== "visible") bar.style.visibility = "visible"
+    const limit = document.getElementById("limit_scratch_bars").checked
+    const start = limit ? Math.max(0, super_list.length - 53) : 0
+    const count = super_list.length - start
+    scratch_bar_ensure(count)
+    scratch_bar_count = count
+    for (let slot = count; slot < scratch_bar_created; slot++) hide_scratch_bar(slot)
 
-            const ordText = scratch_bar_sequence(i)
-            // Convert instantly: no budget, no waiting for the next frame.
-            // convert_From_wY() is memoized, so repeat frames are cache hits.
-            const label = convert_From_wY(ordText, scratch_bar_display)
-            if (label !== scratch_bar_label_cache[i]) {
-                scratch_bar_label_cache[i] = label
-                bar._label.innerHTML = label
-            }
-
-            const percent = (1 - super_list[i][2]) * 100
-            const metaText =
-                `(${percent.toFixed(2)}% / ` +
-                (tt == 0 ? `${formatSeconds(secondsLeft)} left / ${(secondsLeft * 1000)}` : `in ${new Date(secondsLeft * 1000 + currentSimulatedTime).toLocaleString()}`) +
-                `)`
-            if (metaText !== scratch_bar_meta_cache[i]) {
-                scratch_bar_meta_cache[i] = metaText
-                bar._meta.textContent = metaText
-            }
-
-            const bg = `hsl(${super_list[i][1] * 10},100%,90%)`
-            if (bar.style.backgroundColor !== bg) bar.style.backgroundColor = bg
-            const w = `${percent}%`
-            if (bar.style.width !== w) bar.style.width = w
+    for (let slot = 0; slot < count; slot++) {
+        const i = start + slot
+        const bar = scratch_bar_elements[slot]
+        bar._sequenceIndex = i
+        if (bar.style.display === "none") bar.style.display = ""
+        const secondsLeft = i === last ? lt : Math.max(0,
+            (get_time_inv(scratch_bar_boundary(i, x)) - currentSimulatedTime) / 1000)
+        const ordText = scratch_bar_sequence(i)
+        const label = convert_From_wY(ordText, scratch_bar_display)
+        if (label !== scratch_bar_label_cache[slot]) {
+            scratch_bar_label_cache[slot] = label
+            bar._label.innerHTML = label
         }
-        if (i + 1 == super_list.length) {
-            lt = secondsLeft
+
+        const percent = (1 - super_list[i][2]) * 100
+        const metaText =
+            `(${percent.toFixed(2)}% / ` +
+            (tt == 0 ? `${formatSeconds(secondsLeft)} left / ${(secondsLeft * 1000)}` : `in ${new Date(secondsLeft * 1000 + currentSimulatedTime).toLocaleString()}`) +
+            `)`
+        if (metaText !== scratch_bar_meta_cache[slot]) {
+            scratch_bar_meta_cache[slot] = metaText
+            bar._meta.textContent = metaText
         }
+
+        const bg = `hsl(${super_list[i][1] * 10},100%,90%)`
+        if (bar.style.backgroundColor !== bg) bar.style.backgroundColor = bg
+        const w = `${percent}%`
+        if (bar.style.width !== w) bar.style.width = w
     }
 }
 

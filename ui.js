@@ -200,6 +200,7 @@ function saveAllSettings() {
 
         // Milestone Settings
         Scratch_bar_height: Number(document.getElementById("Scratch_bar_height").value),
+        limit_scratch_bars: document.getElementById("limit_scratch_bars").checked,
 
         // Visualizer (Mountain) Settings - Sizing
         ROWHEIGHT: Number(document.getElementById("ROWHEIGHT").value),
@@ -268,6 +269,7 @@ function loadAllSettings() {
         setVal("Y_Terms", settings.Y_Terms);
         setVal("BMS_Terms", settings.BMS_Terms);
         setVal("Scratch_bar_height", settings.Scratch_bar_height);
+        setCheck("limit_scratch_bars", settings.limit_scratch_bars);
         setVal("ROWHEIGHT", settings.ROWHEIGHT);
         setVal("COLUMNWIDTH", settings.COLUMNWIDTH);
         setVal("LINETHICKNESS", settings.LINETHICKNESS);
@@ -295,7 +297,7 @@ function loadAllSettings() {
 function attachAutoSaveListeners() {
     const selectorIds = [
         "font_family", "font_size", "compress_bms", "format_cOCF",
-        "Y_Terms", "BMS_Terms", "Scratch_bar_height", 
+        "Y_Terms", "BMS_Terms", "Scratch_bar_height", "limit_scratch_bars",
         "ROWHEIGHT", "COLUMNWIDTH", "LINETHICKNESS", "NUMBERSIZE", "NUMBERTHICKNESS",
         "MAXDIMENSIONS", "MaxTerms", "STACKMODE", "HIGHLIGHT", "EXTRADIVIDER", "_UPDATEMODE"
     ];
