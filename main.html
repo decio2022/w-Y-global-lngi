@@ -48,6 +48,21 @@
     </div>
 
     <div class="card resizable" id="main_lngi">
+        <label for="main_lngi_display_mode">Notation:
+            <select id="main_lngi_display_mode">
+                <option value="wY">ω-Y sequence</option>
+                <option value="DBMS">DBMS</option>
+                <option value="BMS">BMS</option>
+                <option value="2-shifted OCF">2-shifted OCF</option>
+                <option value="cOCF">cOCF</option>
+                <option value="EcOCF">Extended cOCF</option>
+                <option value="BcOCF">Buffed cOCF</option>
+                <option value="PMS">PMS</option>
+                <option value="AMS">AMS</option>
+                <option value="0Y">0-Y</option>
+                <option value="Vulcaniz">Vulcaniz</option>
+            </select>
+        </label>
         <div id="main_lngi_Content">Loading main sequence...</div>
         <div class="resize-handle"></div>
     </div>
@@ -90,7 +105,7 @@
             </select>
         </div>
         <div class="header-row">
-            <small>The main sequence uses this notation. Progress bars show ω-Y while running and convert when paused; Conversions run in the background.</small>
+            <small>The main sequence uses this notation. Progress bars show ω-Y while running and convert when paused; conversions run in the background.</small>
         </div>
         <div class="header-row">
             <label for="limit_scratch_bars">
