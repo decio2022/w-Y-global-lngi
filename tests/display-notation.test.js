@@ -3,6 +3,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const ui = fs.readFileSync('ui.js', 'utf8');
+const html = fs.readFileSync('main.html', 'utf8');
+// The main card is only 60px high. Keep the selector outside it so the
+// converted sequence remains visible instead of being clipped below the fold.
+assert.ok(html.indexOf('id="main_lngi_display_mode"') < html.indexOf('id="main_lngi"'));
 const snippet = ui.slice(ui.indexOf("let scratch_bar_display ="), ui.indexOf('let compress_BMS'));
 function select() {
     return { value: 'wY', listeners: {}, addEventListener(event, fn) { this.listeners[event] = fn; } };
