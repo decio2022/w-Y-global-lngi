@@ -8,9 +8,11 @@ the sequence to pause or resume. Rewinding stops at the start of the timeline.
 
 In the Progress tab, **Follow time direction** makes the bars and their
 click-to-jump targets follow a negative speed toward earlier boundaries. Turn it
-off to keep the original forward-looking bars. The displayed countdowns and
-dates are in simulated time, not wall-clock time. The speed and this option are
-saved locally.
+off to keep the original forward-looking bars. Reverse intervals that share a
+target are shown once, and already-reached or precision-limited targets are
+omitted (except for the start-of-timeline indicator). The displayed countdowns
+and dates are in simulated time, not wall-clock time. The speed and this option
+are saved locally.
 
 Run the tests with `for test in tests/*.test.js; do node "$test"; done`.
 

@@ -16,7 +16,7 @@ function element() {
         },
         appendChild(child) { this.children.push(child); },
         addEventListener(type, callback) { this.listeners[type] = callback; },
-        click() { this.listeners.click(); }
+        click() { return this.listeners.click(); }
     };
 }
 const nodes = {
@@ -61,16 +61,24 @@ assert.equal(result[0], '80.000%');
 assert.equal(result[2], '1,2,2,2');
 assert.equal(context.scratch_bar_elements[0]._label.innerHTML, '1,3');
 assert.equal(context.scratch_bar_jump_target(0).u, 4);
+const forwardSnapshot = Array.from(context.scratch_bar_elements.slice(0, context.scratch_bar_count), bar =>
+    [bar._sequenceIndex, bar._label.innerHTML, bar.style.width, bar._meta.textContent]);
 context.render_main_bar_text(result, context.virtualElapsed);
 assert.match(nodes.main_lngi_bar.innerHTML, /next ordinal/);
 
 // Reverse the same chain and check the real targets, labels, widths and timers.
 context.milestoneMulti = -2;
 result = setPosition(3.2);
-assert.equal(result[0], '20.000%');
+assert.equal(result[0], '60.000%');
+assert.equal(context.scratch_bar_count, 2);
 assert.equal(context.scratch_bar_elements[0]._label.innerHTML, '1,2');
-assert.equal(context.scratch_bar_elements[4]._label.innerHTML, '1,2,2,2');
-near(context.scratch_bar_boundary(4, 3.2, true), 3.1875);
+assert.equal(context.scratch_bar_elements[1]._label.innerHTML, '1,2,2,2');
+assert.deepEqual([context.scratch_bar_elements[0]._sequenceIndex, context.scratch_bar_elements[1]._sequenceIndex], [0, 3]);
+near(parseFloat(context.scratch_bar_elements[0].style.width), 80);
+near(parseFloat(context.scratch_bar_elements[1].style.width), 60);
+near(parseFloat(nodes.main_lngi_bar.style.width), 60);
+assert.equal(context.scratch_bar_elements[2].style.display, 'none');
+near(context.scratch_bar_boundary(3, 3.2, true), 3.1875);
 near(context.lt, (context.get_time_inv(3.2) - context.get_time_inv(3.1875)) / 1000, 1e-5);
 context.render_main_bar_text(result, context.virtualElapsed);
 assert.match(nodes.main_lngi_bar.innerHTML, /previous boundary/);
@@ -81,8 +89,11 @@ setPosition(3.195);
 assert.ok(parseFloat(context.scratch_bar_elements[0].style.width) > oldWidth);
 assert.ok(context.lt < oldTimer);
 result = setPosition(3.1875);
-assert.equal(result[0], '100.000%');
-assert.equal(context.lt, 0);
+assert.equal(result[2], '1,2,2,2');
+assert.equal(context.scratch_bar_count, 1); // the just-reached target is no longer a jump
+assert.equal(context.scratch_bar_elements[0]._label.innerHTML, '1,2');
+assert.equal(result[0], '81.250%');
+near(context.lt, (context.get_time_inv(3.1875) - context.get_time_inv(3)) / 1000);
 result = setPosition(3.187499);
 assert.notEqual(result[2], '1,2,2,2');
 assert.ok(context.lt >= 0);
@@ -90,46 +101,115 @@ assert.ok(context.lt >= 0);
 // Clicking a reverse bar lands at its earlier labeled boundary, including when
 // the clock has an offset, and never jumps forward to the old target.
 setPosition(3.2, 60000);
-const target = context.scratch_bar_jump_target(4);
+const target = context.scratch_bar_jump_target(context.scratch_bar_elements[1]._sequenceIndex);
 const before = context.virtualElapsed + context.timeOffset;
 assert.equal(target.shown, '1,2,2,2');
 assert.equal(target.reversed, true);
-assert.equal(context.jump_to_scratch_bar(4), true);
+assert.equal(context.scratch_bar_elements[1].click(), true);
 assert.equal(savedJumps.at(-1), true);
 assert.ok(context.virtualElapsed + context.timeOffset < before);
 near(context.virtualElapsed + context.timeOffset, context.get_time_inv(target.u), 0.1);
 assert.equal(context.current_main_sequence, target.shown);
 
 setPosition(3.2, -86400000);
-const firstTarget = context.scratch_bar_jump_target(0);
+const firstTarget = context.scratch_bar_jump_target(context.scratch_bar_elements[0]._sequenceIndex);
 assert.equal(firstTarget.shown, '1,2');
-assert.equal(context.jump_to_scratch_bar(0), true);
+assert.equal(context.scratch_bar_elements[0].click(), true);
 near(context.virtualElapsed + context.timeOffset, context.get_time_inv(3), 0.1);
 assert.equal(context.current_main_sequence, '1,2');
 
-// Nested intervals around several real timeline stages must also jump to the
-// displayed prefix. Precision-limited zero-distance targets are skipped.
-for (const x of [2.3, 2.6, 3.01, 3.3, 3.6, 3.76]) {
-    setPosition(x);
-    const length = context.super_list.length;
-    for (let i = 0; i < Math.min(length, 10); i++) {
+// A precision-limited chain still maps its last displayed slot to the right
+// earlier target when a clock offset is in effect.
+for (const offset of [-86400000, 86400000]) {
+    setPosition(3.76, offset);
+    const start = context.virtualElapsed + context.timeOffset;
+    const bar = context.scratch_bar_elements[context.scratch_bar_count - 1];
+    const target = context.scratch_bar_jump_target(bar._sequenceIndex);
+    assert.equal(bar.click(), true);
+    assert.ok(context.virtualElapsed + context.timeOffset < start);
+    assert.equal(context.current_main_sequence, target.shown);
+}
+
+// Real timeline chains must render each earlier target only once. Precision-
+// limited and already-reached entries at x do not become unusable zero rows.
+// Every retained slot keeps its original index and jumps to its displayed target.
+for (const x of [2.3, 2.5, 2.6, 3, 3.01, 3.3, 3.5, 3.6, 3.75, 3.76, 3.765, 3.7655, 4]) {
+    const result = setPosition(x);
+    const start = context.virtualElapsed;
+    const u = context.get_time(start);
+    const count = context.scratch_bar_count;
+    assert.ok(count > 0, `no earlier target at ${x}`);
+    const bars = Array.from(context.scratch_bar_elements.slice(0, count));
+    const boundaries = bars.map(bar => context.scratch_bar_boundary(bar._sequenceIndex, u, true));
+    const targetTimes = boundaries.map(boundary => context.get_time_inv(boundary));
+    assert.equal(new Set(boundaries).size, count, `duplicate boundary at ${x}`);
+    assert.equal(new Set(targetTimes).size, count, `duplicate clock target at ${x}`);
+    assert.equal(new Set(bars.map(bar => bar._label.innerHTML)).size, count, `duplicate label at ${x}`);
+    assert.ok(boundaries.every(boundary => boundary < u), `current-boundary row at ${x}`);
+    assert.ok(targetTimes.every(time => time < start), `zero-distance row at ${x}`);
+    near(parseFloat(result[0]), parseFloat(bars[count - 1].style.width), 0.001);
+    near(context.lt, (start - targetTimes[count - 1]) / 1000, 1e-5);
+    assert.ok(context.lt > 0, `zero main countdown at ${x}`);
+    for (let slot = 0; slot < count; slot++) {
         setPosition(x);
-        const start = context.virtualElapsed;
-        const t = context.scratch_bar_jump_target(i);
-        assert.equal(context.scratch_bar_elements[i]._label.innerHTML, t.shown);
-        if (context.get_time_inv(t.u) >= start) continue;
-        assert.equal(context.jump_to_scratch_bar(i), true, `jump ${x}, bar ${i}`);
+        const bar = context.scratch_bar_elements[slot];
+        const target = context.scratch_bar_jump_target(bar._sequenceIndex);
+        assert.equal(bar._label.innerHTML, target.shown);
+        assert.equal(bar.click(), true, `jump ${x}, slot ${slot}`);
         assert.ok(context.virtualElapsed < start);
-        assert.equal(context.current_main_sequence, t.shown);
+        assert.equal(context.current_main_sequence, target.shown);
     }
 }
 
-// Limited mode reuses slots, including the flash for an unavailable target.
+// Keep the broadest interval for a shared target. Its progress must keep
+// increasing, not reset, as rewinding crosses a nested forward boundary.
+setPosition(3.250001);
+const rootBefore = parseFloat(context.scratch_bar_elements[0].style.width);
+setPosition(3.249999);
+const rootAfter = parseFloat(context.scratch_bar_elements[0].style.width);
+assert.ok(rootAfter > rootBefore && rootAfter - rootBefore < 0.001);
+setPosition(3.203126);
+const nestedBefore = parseFloat(context.scratch_bar_elements[1].style.width);
+setPosition(3.203124);
+const nestedAfter = parseFloat(context.scratch_bar_elements[1].style.width);
+assert.ok(nestedAfter > nestedBefore && nestedAfter - nestedBefore < 0.01);
+
+// At an exact integer, the previous root is the preceding integer, rather
+// than the current instant; the shown label and the jump agree.
+result = setPosition(3);
+assert.equal(context.scratch_bar_elements[0]._label.innerHTML, '1,1');
+assert.equal(context.scratch_bar_jump_target(0).u, 2);
+assert.equal(result[0], '0.000%');
+assert.equal(context.scratch_bar_elements[0].click(), true);
+assert.equal(context.virtualElapsed, 0);
+
+// A positive sub-millisecond countdown must not be rendered as zero seconds.
+result = setPosition(3.76);
+assert.ok(context.lt > 0 && context.lt < 0.005);
+assert.match(result[1], /ms$/);
+assert.match(context.scratch_bar_elements[context.scratch_bar_count - 1]._meta.textContent, /ms left/);
+context.render_main_bar_text(result, context.virtualElapsed);
+assert.match(nodes.main_lngi_bar.innerHTML, /ms left/);
+// The same earlier target also drives the main bar on another tab.
+const mainTimer = context.lt;
+const mainPercent = result[0];
+context.page = 0;
+result = setPosition(3.76);
+assert.equal(context.lt, mainTimer);
+assert.equal(result[0], mainPercent);
+assert.match(result[1], /ms$/);
+context.page = 1;
+
+// Limiting happens after deduplication: a long run of identical raw entries
+// must not crowd out distinct earlier targets. Flash the retained display slot.
 nodes.limit_scratch_bars.checked = true;
 setPosition(3.76);
 assert.ok(context.super_list.length > 40);
-const firstVisible = context.super_list.length - 40;
-assert.equal(context.scratch_bar_elements[0]._sequenceIndex, firstVisible);
+const indices = Array.from(context.scratch_bar_reverse_indices(context.get_time(context.virtualElapsed)));
+assert.ok(indices.length < 40);
+assert.equal(context.scratch_bar_count, indices.length);
+assert.deepEqual(Array.from(context.scratch_bar_elements.slice(0, indices.length), bar => bar._sequenceIndex), indices);
+const firstVisible = indices[0];
 context.scratch_bar_blocked(firstVisible);
 assert.ok(context.scratch_bar_elements[0].classList.contains('scratch-bar-blocked'));
 
@@ -139,8 +219,13 @@ nodes.limit_scratch_bars.checked = false;
 setPosition(3.2);
 context.milestoneMulti = 0;
 assert.equal(context.progress_bars_reversed(), true);
+setPosition(3.2);
+assert.equal(context.scratch_bar_count, 2);
 nodes.reverse_scratch_bars.checked = false;
 setPosition(3.2);
+assert.equal(context.scratch_bar_count, context.super_list.length);
+assert.deepEqual(Array.from(context.scratch_bar_elements.slice(0, context.scratch_bar_count), bar =>
+    [bar._sequenceIndex, bar._label.innerHTML, bar.style.width, bar._meta.textContent]), forwardSnapshot);
 assert.equal(context.scratch_bar_jump_target(0).u, 4);
 assert.equal(context.scratch_bar_elements[0]._label.innerHTML, '1,3');
 nodes.reverse_scratch_bars.checked = true;
@@ -148,13 +233,23 @@ context.milestoneMulti = 1;
 setPosition(3.2);
 assert.equal(context.progress_bars_reversed(), false);
 
-// Rewinding to zero shows the first sequence, and a pre-start clock clears
-// stale bars. Coming back to zero must rebuild the previously cached chain.
+// The clock can have advanced slightly while its mapped value still rounds to
+// the first timeline value. It must still be possible to rewind that time.
 context.milestoneMulti = -1;
 context.timeOffset = 0;
+context.virtualElapsed = 1e-7;
+result = context.num_time(context.virtualElapsed);
+assert.equal(context.get_time(context.virtualElapsed), 2);
+assert.equal(context.scratch_bar_count, 1);
+assert.equal(context.scratch_bar_elements[0].click(), true);
+assert.equal(context.virtualElapsed, 0);
+
+// Rewinding to zero shows the first sequence, and a pre-start clock clears
+// stale bars. Coming back to zero must rebuild the previously cached chain.
 context.virtualElapsed = 0;
 result = context.num_time(0);
 assert.equal(result[2], '1,1');
+assert.equal(context.scratch_bar_count, 1);
 context.render_main_bar_text(result, 0);
 assert.equal(nodes.main_lngi_bar.innerHTML, 'Start of timeline');
 assert.match(context.scratch_bar_elements[0]._meta.textContent, /start of timeline/);

@@ -37,9 +37,20 @@ assert.equal(conversions.length, 0);
 assert.equal(elements[0]._label.innerHTML, 'ord60');
 assert.equal(elements[39]._label.innerHTML, 'ord99,1');
 elements[0].click(); assert.equal(clicked, 60);
+// Limit the last 40 distinct reverse targets, not the last 40 raw entries.
+// These synthetic intervals have repeated labels but different boundaries.
 context.milestoneMulti = -1;
-context.update_scratch_bars(3.2, 3200, '1,2');
-elements[0].click(); assert.equal(clicked, 60); // reverse still uses the sequence index
+const reverseX = 3 - 2 ** -51;
+const uniqueIndices = Array.from(context.scratch_bar_reverse_indices(reverseX));
+assert.ok(uniqueIndices.length > 40);
+context.update_scratch_bars(reverseX, reverseX * 1000, '1,2');
+assert.equal(context.scratch_bar_count, 40);
+assert.equal(elements[0]._sequenceIndex, uniqueIndices.at(-40));
+assert.equal(elements[39]._sequenceIndex, uniqueIndices.at(-1));
+assert.ok(elements[39]._sequenceIndex < 99); // completed precision-limited targets are omitted
+elements[0].click(); assert.equal(clicked, uniqueIndices.at(-40));
+assert.equal(new Set(elements.slice(0, 40).map(el => context.scratch_bar_boundary(el._sequenceIndex, reverseX, true))).size, 40);
+assert.equal(new Set(elements.slice(0, 40).map(el => context.get_time_inv(context.scratch_bar_boundary(el._sequenceIndex, reverseX, true)))).size, 40);
 context.milestoneMulti = 1;
 limit.checked = false; conversions = [];
 context.update_scratch_bars(1, 0);
@@ -95,8 +106,8 @@ worker.onmessage({ data: { key: worker.requests[1].key, label: 'stale' } });
 context.update_scratch_bars(1, 0);
 assert.equal(elements[1]._label.innerHTML, 'ord1');
 
-// Reversed bars count toward the start of each current interval, rather than
-// continuing to count toward its future endpoint. The root uses a full 0–100%.
+// Multiple forward intervals can share a reverse boundary. Keep the widest
+// interval per boundary, so root progress spans the whole integer interval.
 limit.checked = false;
 context.scratch_bar_display = 'wY';
 context.super_list = [
@@ -105,23 +116,41 @@ context.super_list = [
 ];
 context.milestoneMulti = -2; context.paused = true; context.tt = 0;
 context.update_scratch_bars(3.2, 3200, '1,2,2,2');
+assert.equal(context.scratch_bar_count, 2);
+assert.deepEqual([elements[0]._sequenceIndex, elements[1]._sequenceIndex], [0, 3]);
 assert.equal(elements[0]._label.innerHTML, '1,2');
-assert.equal(elements[4]._label.innerHTML, '1,2,2,2');
+assert.equal(elements[1]._label.innerHTML, '1,2,2,2');
+assert.equal(elements[2].style.display, 'none');
 assert.ok(Math.abs(parseFloat(elements[0].style.width) - 80) < 1e-9);
-assert.ok(Math.abs(parseFloat(elements[4].style.width) - 20) < 1e-9);
+assert.ok(Math.abs(parseFloat(elements[1].style.width) - 60) < 1e-9);
 assert.ok(Math.abs(context.lt - 0.0125) < 1e-9);
-assert.match(elements[4].title, /rewind/);
+assert.match(elements[1].title, /rewind/);
+elements[0].click(); assert.equal(clicked, 0);
+elements[1].click(); assert.equal(clicked, 3);
+// Distinct mathematical boundaries that round to one clock value still
+// represent just one clickable target.
+const originalTimeInverse = context.get_time_inv;
+context.get_time_inv = x => x === 3 || x === 3.1875 ? 3000 : originalTimeInverse(x);
+context.update_scratch_bars(3.2, 3200, '1,2,2,2');
+assert.equal(context.scratch_bar_count, 1);
+assert.equal(elements[1].style.display, 'none');
+context.get_time_inv = originalTimeInverse;
+context.update_scratch_bars(3.2, 3200, '1,2,2,2');
+assert.equal(context.scratch_bar_count, 2);
+assert.equal(elements[1].style.display, '');
 context.tt = 1;
 context.update_scratch_bars(3.2, 3200, '1,2,2,2');
-assert.ok(elements[4]._meta.textContent.includes(new Date(context.st + 3187.5).toLocaleString()));
+assert.ok(elements[1]._meta.textContent.includes(new Date(context.st + 3187.5).toLocaleString()));
 
 // Zero holds the previous direction; disabling the option restores the legacy
 // forward targets even with a negative speed. Positive speed always uses them.
 context.milestoneMulti = 0; context.tt = 0;
 context.update_scratch_bars(3.2, 3200, '1,2,2,2');
+assert.equal(context.scratch_bar_count, 2);
 assert.equal(elements[0]._label.innerHTML, '1,2');
 reverse.checked = false; context.milestoneMulti = -2;
 context.update_scratch_bars(3.2, 3200, '1,2,2,2');
+assert.equal(context.scratch_bar_count, 5);
 assert.equal(elements[0]._label.innerHTML, '1,3');
 assert.equal(elements[4]._label.innerHTML, '1,2,2,2,1');
 assert.ok(Math.abs(parseFloat(elements[4].style.width) - 80) < 1e-9);

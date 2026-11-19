@@ -222,7 +222,9 @@ function scratch_bar_boundary(i, x, reversed = false) {
         const [, steps, remaining] = super_list[i]
         return x + remaining * 2 ** (1 - steps)
     }
-    if (i === 0) return Math.max(2, Math.floor(x))
+    // At an integer boundary, the boundary at x has already been reached;
+    // the previous root boundary is the preceding integer.
+    if (i === 0) return Math.max(2, Math.ceil(x) - 1)
     const [, steps, remaining] = super_list[i]
     const width = 2 ** (1 - steps)
     let boundary = x - (1 - remaining) * width
@@ -234,11 +236,31 @@ function scratch_bar_boundary(i, x, reversed = false) {
     return Math.max(2, Math.min(x, boundary))
 }
 
+// Forward intervals can share the same start, so they are one reverse target.
+// Keep the first (widest) interval: its percentage remains continuous as the
+// forward chain changes, and the root still covers the whole integer interval.
+// A completed/precision-limited boundary at x is not an earlier jump target.
+function scratch_bar_reverse_indices(x, currentSimulatedTime = get_time_inv(x)) {
+    if (currentSimulatedTime <= 0) return super_list.length ? [0] : []
+    const boundaries = new Set(), times = new Set(), indices = []
+    for (let i = 0; i < super_list.length; i++) {
+        const boundary = scratch_bar_boundary(i, x, true)
+        if (boundaries.has(boundary) || boundary > x || (boundary === x && x > 2)) continue
+        boundaries.add(boundary)
+        const targetTime = get_time_inv(boundary)
+        // Distinct numeric boundaries can still round to the same clock value.
+        if (!Number.isFinite(targetTime) || targetTime >= currentSimulatedTime || times.has(targetTime)) continue
+        times.add(targetTime)
+        indices.push(i)
+    }
+    return indices
+}
+
 function scratch_bar_percent(i, x, reversed) {
     const remaining = super_list[i][2]
     // The root bar's forward display starts at 50%, so use the actual
     // fractional position for its reverse journey to the previous integer.
-    const fraction = reversed && i === 0 ? 1 - (x - Math.floor(x))
+    const fraction = reversed && i === 0 ? 1 - (x - scratch_bar_boundary(i, x, true))
         : reversed ? remaining : 1 - remaining
     return Math.max(0, Math.min(100, fraction * 100))
 }
@@ -246,7 +268,7 @@ function scratch_bar_percent(i, x, reversed) {
 // A reverse boundary starts at the common sequence prefix of the current
 // sequence and this forward interval. The root interval starts at 1,(n-1).
 function scratch_bar_reverse_sequence(i, x, currentSequence) {
-    if (i === 0) return `1,${Math.max(1, Math.floor(x) - 1)}`
+    if (i === 0) return `1,${Math.max(1, scratch_bar_boundary(0, x, true) - 1)}`
     const interval = super_list[i][0]
     let pos = 0, lastComma = -1
     while (pos < currentSequence.length && pos < interval.length && currentSequence[pos] === interval[pos]) {
@@ -261,6 +283,13 @@ function scratch_bar_reverse_sequence(i, x, currentSequence) {
 function scratch_bar_seconds_left(i, x, currentSimulatedTime, reversed) {
     const targetTime = get_time_inv(scratch_bar_boundary(i, x, reversed))
     return Math.max(0, (reversed ? currentSimulatedTime - targetTime : targetTime - currentSimulatedTime) / 1000)
+}
+
+function scratch_bar_countdown_text(seconds, reversed) {
+    // At deep positions a real reverse target can be less than 0.005 seconds
+    // away. The ordinary seconds formatter would misleadingly show zero.
+    if (reversed && seconds > 0 && seconds < 0.005) return `${Number((seconds * 1000).toPrecision(3))} ms`
+    return formatSeconds(seconds)
 }
 
 // Notation conversions can take longer than a frame even for a single label. Keep
@@ -308,23 +337,28 @@ function progress_bar_label(ord, mode) {
     return ord
 }
 
-function update_scratch_bars(x, currentSimulatedTime, currentSequence) {
+function update_scratch_bars(x, currentSimulatedTime, currentSequence, reverseIndices = null) {
     const reversed = progress_bars_reversed()
-    // The final countdown controls the main bar even outside the progress page.
-    const last = super_list.length - 1
+    // The last distinct, earlier reverse target controls the main bar even
+    // outside the progress page. Forward mode retains the original chain.
+    const indices = reversed ? (reverseIndices || scratch_bar_reverse_indices(x, currentSimulatedTime)) : null
+    const last = indices ? (indices.length ? indices[indices.length - 1] : -1) : super_list.length - 1
     lt = last >= 0 ? scratch_bar_seconds_left(last, x, currentSimulatedTime, reversed) : 0
     if (page != 1) return
 
+    // Apply the display limit after deduplication; otherwise a long run of
+    // identical reverse targets can hide all of the other meaningful bars.
+    const total = indices ? indices.length : super_list.length
     const limit = document.getElementById("limit_scratch_bars").checked
-    const start = limit ? Math.max(0, super_list.length - 40) : 0
-    const count = super_list.length - start
+    const start = limit ? Math.max(0, total - 40) : 0
+    const count = total - start
     scratch_bar_ensure(count)
     scratch_bar_count = count
     for (let slot = count; slot < scratch_bar_created; slot++) hide_scratch_bar(slot)
     const stopped = isPaused() || milestoneMulti === 0 || (milestoneMulti < 0 && currentSimulatedTime <= 0)
 
     for (let slot = 0; slot < count; slot++) {
-        const i = start + slot
+        const i = indices ? indices[start + slot] : start + slot
         const bar = scratch_bar_elements[slot]
         bar._sequenceIndex = i
         if (bar.style.display === "none") bar.style.display = ""
@@ -345,7 +379,7 @@ function update_scratch_bars(x, currentSimulatedTime, currentSequence) {
         const atStart = reversed && currentSimulatedTime <= 0
         const metaText =
             `(${percent.toFixed(2)}% / ` +
-            (atStart ? "start of timeline" : tt == 0 ? `${formatSeconds(secondsLeft)} left / ${secondsLeft * 1000} ms`
+            (atStart ? "start of timeline" : tt == 0 ? `${scratch_bar_countdown_text(secondsLeft, reversed)} left / ${secondsLeft * 1000} ms`
                 : `at ${new Date(st + targetTime).toLocaleString()}`) +
             `)`
         if (metaText !== scratch_bar_meta_cache[slot]) {
@@ -744,17 +778,19 @@ function num_time(t, update_main_bar = true) {
     var u = get_time(t)
     var j = num_to_lngi(u)
     const reversed = progress_bars_reversed()
-    const percent = reversed ? scratch_bar_percent(super_list.length - 1, u, true) : (1 - j[1]) * 100
+    const reverseIndices = reversed ? scratch_bar_reverse_indices(u, t) : null
+    const reverseLast = reverseIndices && reverseIndices.length ? reverseIndices[reverseIndices.length - 1] : -1
+    const percent = reversed ? (reverseLast >= 0 ? scratch_bar_percent(reverseLast, u, true) : 0) : (1 - j[1]) * 100
     if (update_main_bar) {
         current_main_sequence = j[0]
         refresh_main_notation()
         document.getElementById("main_lngi_bar").style.width = `${percent}%`
-        update_scratch_bars(u, t, j[0])
+        update_scratch_bars(u, t, j[0], reverseIndices)
 
-        const remaining = reversed ? 1 - j[1] : j[1]
+        const remaining = reversed ? 1 - percent / 100 : j[1]
         document.getElementById("main_lngi_bar").style.backgroundColor = lt / remaining < 1 ? `hsl(100,90%,70%)` : `hsl(${percent},90%,70%)`
     }
-    return [`${percent.toFixed(3)}%`, formatSeconds(lt), j[0]]
+    return [`${percent.toFixed(3)}%`, scratch_bar_countdown_text(lt, reversed), j[0]]
 }
 
 function render_main_bar_text(result, simulatedTime) {
