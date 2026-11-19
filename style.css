@@ -80,6 +80,23 @@ h2 {
     min-width: 280px;
 }
 
+.time-speed-card {
+    background: #e3f0ff;
+    flex: 1;
+    min-width: 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.time-speed-card input {
+    width: 90px;
+}
+
+.time-speed-card small {
+    color: #34495e;
+}
+
 #tps {
     background: #ddd;
     flex: 0.5;
@@ -478,6 +495,15 @@ h2 {
 
 .header-row label {
     white-space: nowrap;
+}
+
+/* Long progress controls must remain reachable on narrow screens. */
+#milestone_header .header-row {
+    flex-wrap: wrap;
+}
+
+#milestone_header .header-row label {
+    white-space: normal;
 }
 
 #Scratch_bar_height {

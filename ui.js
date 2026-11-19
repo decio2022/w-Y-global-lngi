@@ -216,6 +216,7 @@ function saveAllSettings() {
         scratch_bar_display_mode: scratch_bar_display,
         Scratch_bar_height: Number(document.getElementById("Scratch_bar_height").value),
         limit_scratch_bars: document.getElementById("limit_scratch_bars").checked,
+        reverse_scratch_bars: document.getElementById("reverse_scratch_bars").checked,
 
         // Visualizer (Mountain) Settings - Sizing
         ROWHEIGHT: Number(document.getElementById("ROWHEIGHT").value),
@@ -237,12 +238,11 @@ function saveAllSettings() {
     localStorage.setItem("lngi_app_settings", JSON.stringify(settings));
 }
 
-function saveMisc() {
-    // Only persist when the app is actually running (not paused by a long idle)
-    // and throttle to ~10 times per second (once per ~100ms) to avoid blocking
-    // the animation frame loop.
+function saveMisc(force = false) {
+    // Throttle frame writes to ~10 per second; explicit speed, pause, and
+    // reverse-jump changes force a save so they survive an immediate reload.
     const now = Date.now()
-    if (!saveMisc._last || now - saveMisc._last >= 100) {
+    if (force || !saveMisc._last || now - saveMisc._last >= 100) {
         saveMisc._last = now
         const misc = {
             //time based events
@@ -252,6 +252,7 @@ function saveMisc() {
             virtualElapsed: virtualElapsed,
             timeOffset: timeOffset,
             milestoneMulti: milestoneMulti,
+            lastTimeDirection: lastTimeDirection,
             pause: pause
         }
         localStorage.setItem("lngi_app_misc", JSON.stringify(misc))
@@ -288,6 +289,7 @@ function loadAllSettings() {
         }
         setVal("Scratch_bar_height", settings.Scratch_bar_height);
         setCheck("limit_scratch_bars", settings.limit_scratch_bars);
+        setCheck("reverse_scratch_bars", settings.reverse_scratch_bars);
         setVal("ROWHEIGHT", settings.ROWHEIGHT);
         setVal("COLUMNWIDTH", settings.COLUMNWIDTH);
         setVal("LINETHICKNESS", settings.LINETHICKNESS);
@@ -315,7 +317,7 @@ function loadAllSettings() {
 function attachAutoSaveListeners() {
     const selectorIds = [
         "font_family", "font_size", "compress_bms", "format_cOCF",
-        "Y_Terms", "BMS_Terms", "Scratch_bar_height", "limit_scratch_bars", "scratch_bar_display_mode", "main_lngi_display_mode",
+        "Y_Terms", "BMS_Terms", "Scratch_bar_height", "limit_scratch_bars", "reverse_scratch_bars", "scratch_bar_display_mode", "main_lngi_display_mode",
         "ROWHEIGHT", "COLUMNWIDTH", "LINETHICKNESS", "NUMBERSIZE", "NUMBERTHICKNESS",
         "MAXDIMENSIONS", "MaxTerms", "STACKMODE", "HIGHLIGHT", "EXTRADIVIDER", "_UPDATEMODE"
     ];
