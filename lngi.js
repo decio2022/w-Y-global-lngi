@@ -1,10 +1,12 @@
 var tt = 0
 const analysisContainer = document.getElementById("analysis_container");
 let st = (1782316800000 + 23 * 3600000) + 864 * 1000
-var timeSpeed = 1.0;
-var timeOffset = 0;       
-var virtualElapsed = 1; 
+var timeOffset = 0;
+var virtualElapsed = 1;
+// milestoneMulti is the actual signed time speed used by the clock.
 var milestoneMulti = 1;
+// A speed of zero keeps the last direction rather than flipping the bars.
+var lastTimeDirection = 1;
 var pause = 2;
 var lastRealTime = Date.now();
 
@@ -29,6 +31,8 @@ function loadMisc() {
         // Restore the rest of the time related state.
         if (typeof misc.timeOffset === "number" && isFinite(misc.timeOffset)) timeOffset = misc.timeOffset;
         if (typeof misc.milestoneMulti === "number" && isFinite(misc.milestoneMulti)) milestoneMulti = misc.milestoneMulti;
+        if (misc.lastTimeDirection === 1 || misc.lastTimeDirection === -1) lastTimeDirection = misc.lastTimeDirection;
+        if (milestoneMulti !== 0) lastTimeDirection = Math.sign(milestoneMulti);
         if (typeof misc.pause === "number" && isFinite(misc.pause)) pause = misc.pause;
 
         if (restored !== null) {
@@ -53,20 +57,35 @@ var mpage = 0;
 const speedInput = document.getElementById("input_timeSpeed");
 const offsetInput = document.getElementById("input_timeOffset");
 
-function resettime() {
-    virtualElapsed = Date.now() - st
-    timeOffset = 0
-    timeSpeed = 1
-    speedInput.value = "1";
-    offsetInput.value = "0";
+// Apply the old speed up to this instant, then use the new speed from now on.
+function setTimeSpeed(value, syncInput = true) {
+    if (!Number.isFinite(value)) return;
+    advance_virtual_clock(Date.now());
+    milestoneMulti = value;
+    if (value !== 0) lastTimeDirection = Math.sign(value);
+    if (syncInput && speedInput) speedInput.value = String(value);
+    if (typeof saveMisc === "function") saveMisc(true);
 }
 
-if (speedInput && offsetInput) {
-    speedInput.addEventListener("input", function () {
-        let val = parseFloat(speedInput.value);
-        timeSpeed = isNaN(val) ? 0 : val;
-    });
+function resettime() {
+    setTimeSpeed(1);
+    virtualElapsed = Date.now() - st;
+    timeOffset = 0;
+    if (offsetInput) offsetInput.value = "0";
+    if (typeof saveMisc === "function") saveMisc(true);
+}
 
+if (speedInput) {
+    speedInput.value = String(milestoneMulti);
+    speedInput.addEventListener("input", function () {
+        // Ignore incomplete input (such as a lone minus sign) while typing.
+        if (Number.isFinite(speedInput.valueAsNumber)) setTimeSpeed(speedInput.valueAsNumber, false);
+    });
+    speedInput.addEventListener("change", function () {
+        if (!Number.isFinite(speedInput.valueAsNumber)) speedInput.value = String(milestoneMulti);
+    });
+}
+if (offsetInput) {
     offsetInput.addEventListener("input", function () {
         let val = parseFloat(offsetInput.value);
         timeOffset = isNaN(val) ? 0 : val * 1000;
@@ -89,7 +108,7 @@ function formatSeconds(totalSeconds) {
         p(seconds.toFixed(2), 'second')
     ];
 
-    return parts.filter(Boolean).join(' ');
+    return parts.filter(Boolean).join(' ') || "0 seconds";
 }
 // Cached DOM lookups: update() runs every animation frame, so repeated
 // getElementById() calls and unconditional innerHTML/style writes dominate
@@ -185,14 +204,63 @@ var scratch_bar_label_cache = []
 // text nodes at all.
 var scratch_bar_meta_cache = []
 
+function progress_bars_reversed() {
+    if (milestoneMulti !== 0) lastTimeDirection = Math.sign(milestoneMulti)
+    const option = document.getElementById("reverse_scratch_bars")
+    return !!option && option.checked && lastTimeDirection < 0
+}
+
 function scratch_bar_sequence(i) {
     return super_list[i][0] + (i === super_list.length - 1 ? ",1" : "")
 }
 
-function scratch_bar_boundary(i, x) {
-    if (i === 0) return Math.floor(x) + 1
+// In reverse the boundary is the start of the current interval, not the
+// forward target at its end. All but the root bar have dyadic-width intervals.
+function scratch_bar_boundary(i, x, reversed = false) {
+    if (!reversed) {
+        if (i === 0) return Math.floor(x) + 1
+        const [, steps, remaining] = super_list[i]
+        return x + remaining * 2 ** (1 - steps)
+    }
+    if (i === 0) return Math.max(2, Math.floor(x))
     const [, steps, remaining] = super_list[i]
-    return x + remaining * 2 ** (1 - steps)
+    const width = 2 ** (1 - steps)
+    let boundary = x - (1 - remaining) * width
+    // Round away arithmetic noise at dyadic boundaries. When remaining is 1,
+    // the interval has just begun and x itself is already the boundary.
+    if (remaining < 1 && width > 0 && Number.isFinite(boundary / width)) {
+        boundary = Math.round(boundary / width) * width
+    }
+    return Math.max(2, Math.min(x, boundary))
+}
+
+function scratch_bar_percent(i, x, reversed) {
+    const remaining = super_list[i][2]
+    // The root bar's forward display starts at 50%, so use the actual
+    // fractional position for its reverse journey to the previous integer.
+    const fraction = reversed && i === 0 ? 1 - (x - Math.floor(x))
+        : reversed ? remaining : 1 - remaining
+    return Math.max(0, Math.min(100, fraction * 100))
+}
+
+// A reverse boundary starts at the common sequence prefix of the current
+// sequence and this forward interval. The root interval starts at 1,(n-1).
+function scratch_bar_reverse_sequence(i, x, currentSequence) {
+    if (i === 0) return `1,${Math.max(1, Math.floor(x) - 1)}`
+    const interval = super_list[i][0]
+    let pos = 0, lastComma = -1
+    while (pos < currentSequence.length && pos < interval.length && currentSequence[pos] === interval[pos]) {
+        if (currentSequence[pos] === ",") lastComma = pos
+        pos++
+    }
+    if (pos === currentSequence.length && (pos === interval.length || interval[pos] === ",")) return currentSequence
+    if (pos === interval.length && (pos === currentSequence.length || currentSequence[pos] === ",")) return interval
+    return lastComma < 0 ? "1" : currentSequence.slice(0, lastComma)
+}
+
+function scratch_bar_seconds_left(i, x, currentSimulatedTime, reversed) {
+    const targetTime = get_time_inv(scratch_bar_boundary(i, x, reversed))
+    return Math.max(0, (reversed ? currentSimulatedTime - targetTime : targetTime - currentSimulatedTime) / 1000)
 }
 
 // Notation conversions can take longer than a frame even for a single label. Keep
@@ -240,12 +308,11 @@ function progress_bar_label(ord, mode) {
     return ord
 }
 
-function update_scratch_bars(x, currentSimulatedTime) {
+function update_scratch_bars(x, currentSimulatedTime, currentSequence) {
+    const reversed = progress_bars_reversed()
     // The final countdown controls the main bar even outside the progress page.
     const last = super_list.length - 1
-    if (last >= 0) {
-        lt = Math.max(0, (get_time_inv(scratch_bar_boundary(last, x)) - currentSimulatedTime) / 1000)
-    }
+    lt = last >= 0 ? scratch_bar_seconds_left(last, x, currentSimulatedTime, reversed) : 0
     if (page != 1) return
 
     const limit = document.getElementById("limit_scratch_bars").checked
@@ -254,26 +321,32 @@ function update_scratch_bars(x, currentSimulatedTime) {
     scratch_bar_ensure(count)
     scratch_bar_count = count
     for (let slot = count; slot < scratch_bar_created; slot++) hide_scratch_bar(slot)
+    const stopped = isPaused() || milestoneMulti === 0 || (milestoneMulti < 0 && currentSimulatedTime <= 0)
 
     for (let slot = 0; slot < count; slot++) {
         const i = start + slot
         const bar = scratch_bar_elements[slot]
         bar._sequenceIndex = i
         if (bar.style.display === "none") bar.style.display = ""
+        const targetTime = get_time_inv(scratch_bar_boundary(i, x, reversed))
         const secondsLeft = i === last ? lt : Math.max(0,
-            (get_time_inv(scratch_bar_boundary(i, x)) - currentSimulatedTime) / 1000)
-        const ordText = scratch_bar_sequence(i)
-        const label = isPaused() && scratch_bar_display !== "wY"
+            (reversed ? currentSimulatedTime - targetTime : targetTime - currentSimulatedTime) / 1000)
+        const ordText = reversed ? scratch_bar_reverse_sequence(i, x, currentSequence) : scratch_bar_sequence(i)
+        const label = stopped && scratch_bar_display !== "wY"
             ? progress_bar_label(ordText, scratch_bar_display) : ordText
         if (label !== scratch_bar_label_cache[slot]) {
             scratch_bar_label_cache[slot] = label
             bar._label.innerHTML = label
         }
+        const title = reversed ? "Click to rewind to the start of this sequence" : "Click to jump to this sequence"
+        if (bar.title !== title) bar.title = title
 
-        const percent = (1 - super_list[i][2]) * 100
+        const percent = scratch_bar_percent(i, x, reversed)
+        const atStart = reversed && currentSimulatedTime <= 0
         const metaText =
             `(${percent.toFixed(2)}% / ` +
-            (tt == 0 ? `${formatSeconds(secondsLeft)} left / ${(secondsLeft * 1000)}` : `in ${new Date(secondsLeft * 1000 + currentSimulatedTime).toLocaleString()}`) +
+            (atStart ? "start of timeline" : tt == 0 ? `${formatSeconds(secondsLeft)} left / ${secondsLeft * 1000} ms`
+                : `at ${new Date(st + targetTime).toLocaleString()}`) +
             `)`
         if (metaText !== scratch_bar_meta_cache[slot]) {
             scratch_bar_meta_cache[slot] = metaText
@@ -289,9 +362,14 @@ function update_scratch_bars(x, currentSimulatedTime) {
 
 function scratch_bar_jump_target(i) {
     var u_now = get_time(Math.max(0, virtualElapsed + timeOffset))
-    num_to_lngi(u_now)
+    var current = num_to_lngi(u_now)
     if (i < 0 || i >= super_list.length) return null
-    return { u: scratch_bar_boundary(i, u_now), shown: scratch_bar_sequence(i) }
+    const reversed = progress_bars_reversed()
+    return {
+        u: scratch_bar_boundary(i, u_now, reversed),
+        shown: reversed ? scratch_bar_reverse_sequence(i, u_now, current[0]) : scratch_bar_sequence(i),
+        reversed
+    }
 }
 
 // How long the click-to-jump search may spend trying clock steps before it
@@ -305,12 +383,52 @@ function scratch_common_terms(a, b) {
 }
 
 function scratch_bar_blocked(i) {
-    var bar = document.getElementById(`bar_${i}`)
+    // Display slots can represent different sequence indices in limited mode.
+    var bar = scratch_bar_elements.find(el => el._sequenceIndex === i && el.style.display !== "none")
     if (!bar) return
     bar.classList.remove("scratch-bar-blocked")
     void bar.offsetWidth
     bar.classList.add("scratch-bar-blocked")
     setTimeout(() => bar.classList.remove("scratch-bar-blocked"), 700)
+}
+
+function scratch_clock_ulp(value) {
+    if (value === 0) return Number.MIN_VALUE
+    return Math.max(Number.MIN_VALUE, 2 ** (Math.floor(Math.log2(Math.abs(value))) - 52))
+}
+
+function jump_to_reverse_scratch_bar(i, target) {
+    const currentTime = virtualElapsed + timeOffset
+    const base = get_time_inv(target.u)
+    if (!Number.isFinite(base) || base < 0) {
+        scratch_bar_blocked(i)
+        return false
+    }
+    // A boundary can round differently in timeline space and clock space. Try
+    // nearby representable clock values, but never move forward while rewinding.
+    const uStep = scratch_clock_ulp(target.u)
+    const baseElapsed = base - timeOffset
+    const step = Math.max(scratch_clock_ulp(baseElapsed), scratch_clock_ulp(base),
+        Math.abs(get_time_inv(target.u + uStep) - base),
+        Math.abs(base - get_time_inv(Math.max(2, target.u - uStep))))
+    const deadline = Date.now() + SCRATCH_JUMP_BUDGET_MS
+    for (const offset of [0, 0.25, -0.25, 0.5, -0.5, 1, -1, 2, -2, 4, -4]) {
+        const candidate = baseElapsed + offset * step
+        const candidateTime = candidate + timeOffset
+        if (candidateTime >= 0 && candidateTime < currentTime &&
+            num_to_lngi(get_time(candidateTime))[0] === target.shown) {
+            virtualElapsed = candidate
+            const result = num_time(candidateTime)
+            render_main_bar_text(result, candidateTime)
+            if (typeof saveMisc === "function") saveMisc(true)
+            return true
+        }
+        if (Date.now() > deadline) break
+    }
+    // Restore the original chain if the target is finer than the clock can hold.
+    num_to_lngi(get_time(currentTime))
+    scratch_bar_blocked(i)
+    return false
 }
 
 function jump_to_scratch_bar(i) {
@@ -322,6 +440,7 @@ function jump_to_scratch_bar(i) {
     }
     var target = scratch_bar_jump_target(i)
     if (!target) return false
+    if (target.reversed) return jump_to_reverse_scratch_bar(i, target)
     var savedElapsed = virtualElapsed
     // The clock is the elapsed time in milliseconds, so the finest step it can
     // hold is one ULP of the elapsed time itself. The jump is tried on the
@@ -352,7 +471,7 @@ function jump_to_scratch_bar(i) {
                 // Redraw straight away instead of waiting for the next frame.
                 current_main_sequence = got[2]
                 refresh_main_notation()
-                document.getElementById("main_lngi_bar").innerHTML = `${got[0]} to next ordinal (${got[1]} left)`
+                render_main_bar_text(got, virtualElapsed + timeOffset)
                 return true
             }
             var terms = scratch_common_terms(got[2], target.shown)
@@ -369,7 +488,7 @@ function jump_to_scratch_bar(i) {
         got = num_time(virtualElapsed + timeOffset)
         current_main_sequence = got[2]
         refresh_main_notation()
-        document.getElementById("main_lngi_bar").innerHTML = `${got[0]} to next ordinal (${got[1]} left)`
+        render_main_bar_text(got, virtualElapsed + timeOffset)
         scratch_bar_blocked(i)
         return false
     }
@@ -604,24 +723,46 @@ function refresh_main_notation() {
     }
 }
 
-function num_time(t,update_main_bar=true) {
-    var t_elapsed = Math.max(0, t)
-    if (t_elapsed == 0) {
-        return `Not started yet. Wait for the clock to hit.<br>Time left: <span style="font-size: 150%">${(-t / 1000).toFixed(3)}s</span>`
-    } else {
-        var u = get_time(t_elapsed)
-        var j = num_to_lngi(u)
+function num_time(t, update_main_bar = true) {
+    if (t < 0) {
         if (update_main_bar) {
-
-            current_main_sequence = j[0]
-            refresh_main_notation()
-            document.getElementById("main_lngi_bar").style.width = `${(1 - j[1]) * 100}%`
-            update_scratch_bars(u, t)
-
-            document.getElementById("main_lngi_bar").style.backgroundColor = lt / j[1] < 1 ? `hsl(100,90%,70%)` : `hsl(${(1 - j[1]) * 100},90%,70%)`
+            current_main_sequence = null
+            setHTML($("main_lngi_Content"), "Not started yet. Wait for the clock to hit zero.")
+            document.getElementById("main_lngi_bar").style.width = "0%"
+            super_list = []
+            last_num_to_lngi_input = null
+            last_num_to_lngi_result = null
+            lt = 0
+            scratch_bar_count = 0
+            for (let slot = 0; slot < scratch_bar_created; slot++) hide_scratch_bar(slot)
         }
-        return [`${((1 - j[1]) * 100).toFixed(3)}%`, formatSeconds(lt), j[0]]
+        return ["0.000%", formatSeconds(-t / 1000), null]
     }
+
+    // Zero is the beginning of the timeline and has the first sequence. This
+    // keeps the display usable when reverse playback reaches the start.
+    var u = get_time(t)
+    var j = num_to_lngi(u)
+    const reversed = progress_bars_reversed()
+    const percent = reversed ? scratch_bar_percent(super_list.length - 1, u, true) : (1 - j[1]) * 100
+    if (update_main_bar) {
+        current_main_sequence = j[0]
+        refresh_main_notation()
+        document.getElementById("main_lngi_bar").style.width = `${percent}%`
+        update_scratch_bars(u, t, j[0])
+
+        const remaining = reversed ? 1 - j[1] : j[1]
+        document.getElementById("main_lngi_bar").style.backgroundColor = lt / remaining < 1 ? `hsl(100,90%,70%)` : `hsl(${percent},90%,70%)`
+    }
+    return [`${percent.toFixed(3)}%`, formatSeconds(lt), j[0]]
+}
+
+function render_main_bar_text(result, simulatedTime) {
+    const reversed = progress_bars_reversed()
+    const text = result[2] === null ? `Not started yet (${result[1]} until start)`
+        : reversed && simulatedTime <= 0 ? "Start of timeline"
+        : `${result[0]} to ${reversed ? "previous boundary" : "next ordinal"} (${result[1]} left)`
+    setHTML($("main_lngi_bar"), text)
 }
 
 var tps = 0
@@ -688,9 +829,28 @@ function isPaused() {
     return pause % 2 === 0;
 }
 
+function advance_virtual_clock(now) {
+    const delta = Math.max(0, now - lastRealTime);
+    if (!isPaused()) {
+        const current = virtualElapsed + timeOffset;
+        if (milestoneMulti < 0) {
+            // The sequence timeline starts at zero. Do not run past it or keep
+            // accumulating negative time that would later have to be recovered.
+            if (current >= 0) {
+                virtualElapsed = Math.max(-timeOffset, virtualElapsed + delta * milestoneMulti);
+            }
+        } else {
+            virtualElapsed += delta * milestoneMulti;
+        }
+    }
+    lastRealTime = now;
+}
+
 function togglePause() {
+    advance_virtual_clock(Date.now());
     pause += 1;
     updatePauseIndicator();
+    if (typeof saveMisc === "function") saveMisc(true);
 }
 
 function updatePauseIndicator() {
@@ -723,9 +883,7 @@ function update() {
     tps = 1000 / ((now - last_tick) || 1);
     tpsAvg = tpsAvg ? tpsAvg * 0.9 + tps * 0.1 : tps;
     last_tick = now;
-    var deltaRealTime = now - lastRealTime;
-    virtualElapsed += deltaRealTime*(pause%2)*milestoneMulti
-    lastRealTime = now;
+    advance_virtual_clock(now);
     // The clock is the elapsed time. `simulatedTime` used to be `st + elapsed`,
     // but rounding an elapsed time of ~10^12 ms (30 years) onto the grid of
     // doubles of that magnitude costs ~0.001 ms per step, and a second +
@@ -753,23 +911,30 @@ function update() {
     // tab, so records are kept even while the tab is closed). The rewind check
     // has to run first: it drops records from a future the player jumped back
     // out of before the current sequence is tracked again.
-    highest_terms_check_rewind(virtualElapsed + timeOffset)
-    track_highest_terms(Array.isArray(u) ? u[2] : null)
-    setHTML($("main_lngi_bar"), `${u[0]} to next ordinal (${u[1]} left)`)
+    highest_terms_check_rewind(simulatedTime)
+    const hasSequence = typeof u[2] === "string"
+    track_highest_terms(hasSequence ? u[2] : null)
+    render_main_bar_text(u, simulatedTime)
     updatePauseIndicator();
-    setHTML($("tps"), isPaused() ? `⏸ Paused — click the sequence to resume` : `${tpsAvg.toFixed(1)} tps`)
+    const clockStatus = isPaused() ? `⏸ Paused — click the sequence to resume`
+        : milestoneMulti === 0 ? `⏸ Time speed is 0 — set a non-zero speed to continue`
+        : milestoneMulti < 0 && simulatedTime <= 0 ? `⏮ Start of timeline — set a positive speed to advance`
+        : `${tpsAvg.toFixed(1)} tps`
+    setHTML($("tps"), clockStatus)
     setHTML($("milestoneMulti"), `Time speed: ${milestoneMulti}`)
-    if (page == 3 && sync_mountain.checked) { setValue($("input"), trimStringList(u[2], MaxYTerms.valueAsNumber)) }
+    if (page == 3 && sync_mountain.checked && hasSequence) { setValue($("input"), trimStringList(u[2], MaxYTerms.valueAsNumber)) }
     if (page == 2) {
         analysisPanels.forEach(panel => {
-            let txt = "";
-            switch (panel.notation) {
-                case "wY":
-                    txt = "<i>" + u[2] + "</i>";
-                    break;
-                default:
-                    txt = convert_From_wY(u[2], panel.notation);
-                    break;
+            let txt = "Not started yet.";
+            if (hasSequence) {
+                switch (panel.notation) {
+                    case "wY":
+                        txt = "<i>" + u[2] + "</i>";
+                        break;
+                    default:
+                        txt = convert_From_wY(u[2], panel.notation);
+                        break;
+                }
             }
             setHTML(panel.element, txt);
         });
@@ -783,7 +948,8 @@ function update() {
         `);
     setHTML($("time_mode"), `${tt == 0 ? "Time remaining" : "Time reached"} (Press to change)`)
     
-    document.title = `ω-Y LNGI: <${super_list.slice(0, 6).at(-1)[0]}`
+    document.title = hasSequence && super_list.length
+        ? `ω-Y LNGI: <${super_list.slice(0, 6).at(-1)[0]}` : "ω-Y LNGI: Not started yet"
 
     // Milestone timers do not need a full layout/render on every frame.
     if (page == 4 && (!update._lastMilestoneUpdate || now - update._lastMilestoneUpdate >= 250)) {
@@ -797,16 +963,10 @@ function update() {
     }
 
     if (page == 5) {
-        document.getElementById("buddy_lngi1").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 1).at(-1)[0]}`
-        document.getElementById("buddy_lngi2").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 2).at(-1)[0]}`
-        document.getElementById("buddy_lngi3").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 3).at(-1)[0]}`
-        document.getElementById("buddy_lngi4").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 4).at(-1)[0]}`
-        document.getElementById("buddy_lngi5").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 5).at(-1)[0]}`
-        document.getElementById("buddy_lngi6").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 6).at(-1)[0]}`
-        document.getElementById("buddy_lngi7").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 7).at(-1)[0]}`
-        document.getElementById("buddy_lngi8").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 8).at(-1)[0]}`
-        document.getElementById("buddy_lngi9").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 9).at(-1)[0]}`
-        document.getElementById("buddy_lngi10").innerHTML = `ω-Y LNGI: <${super_list.slice(0, 10).at(-1)[0]}`
+        for (let i = 1; i <= 10; i++) {
+            const entry = super_list[Math.min(i, super_list.length) - 1]
+            setHTML($(`buddy_lngi${i}`), entry ? `ω-Y LNGI: <${entry[0]}` : "ω-Y LNGI: Not started yet")
+        }
     }
 
     if (page == 6) {

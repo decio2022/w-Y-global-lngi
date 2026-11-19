@@ -1,4 +1,19 @@
 # Global w-Y LNGI
+
+## Time direction and progress
+
+Set the time speed at the top of the page: positive values move forward,
+negative values rewind, and zero stops the clock. Use Pause/Continue or click
+the sequence to pause or resume. Rewinding stops at the start of the timeline.
+
+In the Progress tab, **Follow time direction** makes the bars and their
+click-to-jump targets follow a negative speed toward earlier boundaries. Turn it
+off to keep the original forward-looking bars. The displayed countdowns and
+dates are in simulated time, not wall-clock time. The speed and this option are
+saved locally.
+
+Run the tests with `for test in tests/*.test.js; do node "$test"; done`.
+
 peak
 
 

@@ -38,7 +38,13 @@
     <div class="top-row" id="top/row">
         <div class="card" id="time">Time elapsed: Loading...</div>
         <div class="card" id="tps">Running at 0 tps</div>
-        <div class="card" id="milestoneMulti">Time Speed</div>
+        <div class="card time-speed-card">
+            <div id="milestoneMulti">Time speed: 1</div>
+            <label for="input_timeSpeed">Set speed:
+                <input type="number" id="input_timeSpeed" value="1" step="any" aria-describedby="time_speed_help">
+            </label>
+            <small id="time_speed_help">Positive: forward · negative: rewind · 0: stop</small>
+        </div>
     </div>
 
     <div class="bar-flexbox" id="bar/flexbox">
@@ -107,13 +113,22 @@
             </select>
         </div>
         <div class="header-row">
-            <small>The main sequence uses this notation. Progress bars show ω-Y while running and convert in the background when paused.</small>
+            <small>The main sequence uses this notation. Progress bars show ω-Y while time moves and convert in the background when stopped.</small>
         </div>
         <div class="header-row">
             <label for="limit_scratch_bars">
                 <input type="checkbox" id="limit_scratch_bars">
                 Show only the last 40 progress bars (reduces notation lag)
             </label>
+        </div>
+        <div class="header-row">
+            <label for="reverse_scratch_bars">
+                <input type="checkbox" id="reverse_scratch_bars" checked>
+                Follow time direction (rewind bars when time speed is negative)
+            </label>
+        </div>
+        <div class="header-row">
+            <small>When rewinding, bars fill toward the previous boundary; click one to rewind to it. Times are simulated, not wall-clock time.</small>
         </div>
 
     </div>
@@ -183,17 +198,13 @@
         <div class="time-control-panel" style="visibility: visible">
             <span bold>Time Control</span>
             <div style="display: flex">
-                <div style="flex:1" hidden>
-                    <label for="input_timeSpeed"><b>Time Speed multiplier:</b> </label>
-                    <input type="number" id="input_timeSpeed" value="1" step="0.1" min="0" style="width: 80px;">
-                </div>
                 <div style="flex: 1" hidden>
                     <label for="input_timeOffset"><b>Time Offset (seconds):</b> </label>
                     <input type="number" id="input_timeOffset" value="0" step="60" style="width: 100px;">
                 </div>
             </div>
             <hr>
-            <button style="padding: 4px 10px; cursor: pointer;" onclick="pause+=1">Pause/Continue</button>
+            <button style="padding: 4px 10px; cursor: pointer;" onclick="togglePause()">Pause/Continue</button>
             <button style="padding: 4px 10px; cursor: pointer;" onclick="virtualElapsed+=1">+1</button>
             <button style="padding: 4px 10px; cursor: pointer;" onclick="virtualElapsed+=10">+10</button>
             <button style="padding: 4px 10px; cursor: pointer;" onclick="virtualElapsed+=100">+100</button>
@@ -201,8 +212,8 @@
             <button style="padding: 4px 10px; cursor: pointer;" onclick="virtualElapsed+=60000">+60000(1 minute)</button>
             <button style="padding: 4px 10px; cursor: pointer;" onclick="virtualElapsed+=3600000">+3600000(1 hour)</button>
             <button style="padding: 4px 10px; cursor: pointer;" onclick="virtualElapsed+=86400000">+86400000(1 day)</button><br>
-            <button style="padding: 4px 10px; cursor: pointer;" onclick="milestoneMulti+=1">+1 multi</button>
-            <button style="padding: 4px 10px; cursor: pointer;" onclick="milestoneMulti-=1">-1 multi</button><br>
+            <button style="padding: 4px 10px; cursor: pointer;" onclick="setTimeSpeed(milestoneMulti + 1)">+1 multi</button>
+            <button style="padding: 4px 10px; cursor: pointer;" onclick="setTimeSpeed(milestoneMulti - 1)">-1 multi</button><br>
             Go to: <input id="virus">
             <button onclick="addvirtualElapsed()" style="padding: 4px 10 px; cursor: pointer;"> Add</button>
             Or go to specific time: <input id="sex">
