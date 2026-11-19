@@ -372,11 +372,11 @@ function update_scratch_bars(x, currentSimulatedTime, currentSequence, reverseIn
             scratch_bar_label_cache[slot] = label
             bar._label.innerHTML = label
         }
-        const title = reversed ? "Click to rewind to the start of this sequence" : "Click to jump to this sequence"
+        const atStart = reversed && currentSimulatedTime <= 0
+        const title = atStart ? "Start of timeline" : reversed ? "Click to rewind past this boundary" : "Click to jump to this sequence"
         if (bar.title !== title) bar.title = title
 
         const percent = scratch_bar_percent(i, x, reversed)
-        const atStart = reversed && currentSimulatedTime <= 0
         const metaText =
             `(${percent.toFixed(2)}% / ` +
             (atStart ? "start of timeline" : tt == 0 ? `${scratch_bar_countdown_text(secondsLeft, reversed)} left / ${secondsLeft * 1000} ms`
@@ -406,8 +406,8 @@ function scratch_bar_jump_target(i) {
     }
 }
 
-// How long the click-to-jump search may spend trying clock steps before it
-// settles for the closest sequence it found (and flashes the bar).
+// Limit the click-to-jump search; forward mode may also settle for a nearby
+// sequence and flash the bar when the exact target is not representable.
 const SCRATCH_JUMP_BUDGET_MS = 120
 
 function scratch_common_terms(a, b) {
@@ -434,32 +434,57 @@ function scratch_clock_ulp(value) {
 function jump_to_reverse_scratch_bar(i, target) {
     const currentTime = virtualElapsed + timeOffset
     const base = get_time_inv(target.u)
-    if (!Number.isFinite(base) || base < 0) {
+    if (!Number.isFinite(base) || base < 0 || base > currentTime || currentTime <= 0) {
         scratch_bar_blocked(i)
         return false
     }
-    // A boundary can round differently in timeline space and clock space. Try
-    // nearby representable clock values, but never move forward while rewinding.
+    const applyJump = (elapsed, simulatedTime) => {
+        virtualElapsed = elapsed
+        const result = num_time(simulatedTime)
+        render_main_bar_text(result, simulatedTime)
+        if (typeof saveMisc === "function") saveMisc(true)
+        return true
+    }
+    // The first boundary has no earlier sequence; stop at the timeline start.
+    const startElapsed = -timeOffset || 0
+    if (base === 0) return applyJump(startElapsed, 0)
+
+    // Land just *past* the selected boundary in the reverse direction. A
+    // clock step and a timeline step may round differently, so search backward
+    // until the mapped position and sequence have both crossed the boundary.
     const uStep = scratch_clock_ulp(target.u)
     const baseElapsed = base - timeOffset
     const step = Math.max(scratch_clock_ulp(baseElapsed), scratch_clock_ulp(base),
-        Math.abs(get_time_inv(target.u + uStep) - base),
         Math.abs(base - get_time_inv(Math.max(2, target.u - uStep))))
     const deadline = Date.now() + SCRATCH_JUMP_BUDGET_MS
-    for (const offset of [0, 0.25, -0.25, 0.5, -0.5, 1, -1, 2, -2, 4, -4]) {
-        const candidate = baseElapsed + offset * step
+    let attempts = 0
+    for (let multiple = 1; multiple <= 4096; multiple *= 2) {
+        const candidate = Math.max(startElapsed, baseElapsed - multiple * step)
         const candidateTime = candidate + timeOffset
-        if (candidateTime >= 0 && candidateTime < currentTime &&
-            num_to_lngi(get_time(candidateTime))[0] === target.shown) {
-            virtualElapsed = candidate
-            const result = num_time(candidateTime)
-            render_main_bar_text(result, candidateTime)
-            if (typeof saveMisc === "function") saveMisc(true)
-            return true
+        if (candidateTime === 0) return applyJump(candidate, 0)
+        if (candidateTime >= 0 && candidateTime < base && candidateTime < currentTime) {
+            const candidateU = get_time(candidateTime)
+            if (candidateU < target.u) {
+                const sequence = num_to_lngi(candidateU)[0]
+                attempts++
+                // Near a limit ntl's precision cutoff can produce a truncated
+                // ancestor instead of the next sequence. A sequence ending in
+                // 1 may legitimately rewind to its prefix, so retain that case.
+                const last = super_list[super_list.length - 1]
+                const truncated = !target.shown.endsWith(",1") && target.shown.startsWith(sequence + ",") &&
+                    last && last[2] <= NTL_MIN_REMAINING
+                if (sequence.includes(",") && Y_Sequence.cmp(sequence, target.shown) < 0 && !truncated) {
+                    const indices = scratch_bar_reverse_indices(candidateU, candidateTime)
+                    const next = indices[indices.length - 1]
+                    if (next !== undefined && scratch_bar_seconds_left(next, candidateU, candidateTime, true) > 0) {
+                        return applyJump(candidate, candidateTime)
+                    }
+                }
+            }
         }
-        if (Date.now() > deadline) break
+        if (attempts >= 2 && Date.now() > deadline) break
     }
-    // Restore the original chain if the target is finer than the clock can hold.
+    // Nothing usable was representable: restore the original chain and clock.
     num_to_lngi(get_time(currentTime))
     scratch_bar_blocked(i)
     return false
@@ -541,6 +566,8 @@ var super_list = []
 
 // Include last terms up to and including 2048 in the countdown bars.
 const NTL_MAX_LAST_TERM = 2048
+// Avoid attempting to expand values indistinguishable from a boundary.
+const NTL_MIN_REMAINING = 1e-14
 // Keep the existing row budget independent of the last-term limit.
 var NTL_MAX_BARS = 1000
 
@@ -555,7 +582,7 @@ function ntl(m) {
     var finished = false
     while (super_list.length < NTL_MAX_BARS) {
         super_list.push([ord, steps, m])
-        if (m <= 1e-14) {
+        if (m <= NTL_MIN_REMAINING) {
             break
         }
         var exp = 0
