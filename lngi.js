@@ -255,13 +255,11 @@ function update_scratch_bars(x, currentSimulatedTime) {
     const indices = []
     const labels = []
     const seenSequences = new Set()
-    const seenLabels = new Set()
     // Keep the most recent occurrence so its countdown and click target remain useful.
     for (let i = super_list.length - 1; i >= 0; i--) {
         let sequence = scratch_bar_sequence(i)
         if (exact) {
             const terms = sequence.split(",")
-            if (maxTerms > 0 && terms.length < maxTerms) continue
             if (maxTerms > 0) sequence = terms.slice(0, maxTerms).join(",")
             if (seenSequences.has(sequence)) continue
             seenSequences.add(sequence)
@@ -269,9 +267,6 @@ function update_scratch_bars(x, currentSimulatedTime) {
         // Convert even while running, off the animation thread. Pending results
         // temporarily show the capped ω-Y sequence and are reconsidered next frame.
         const label = progress_bar_label(sequence, scratch_bar_display)
-        const labelKey = JSON.stringify([label, sequence.split(",").length])
-        if (exact && seenLabels.has(labelKey)) continue
-        if (exact) seenLabels.add(labelKey)
         indices.push(i)
         labels.push(label)
         if (limit && indices.length === 40) break
