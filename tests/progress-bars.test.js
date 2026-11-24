@@ -135,14 +135,12 @@ elements[0].click(); assert.equal(clicked, 99);
 cache.set('2-shifted OCF:1,2,4,8,16,25,36,51,67,85', '1,2,4,8,16,25,36,51,67,85');
 context.update_scratch_bars(1, 0);
 assert.equal(context.scratch_bar_count, 1);
-// With no Y term limit, a notation can still truncate distinct source lengths
-// into the same displayed label; keep only the newest displayed bar.
+// With no term limit, matching labels with different term counts stay distinct.
 maxTerms.valueAsNumber = 0; context.scratch_bar_display = 'BMS';
 context.super_list = [['1,2', 0, 0.1], ['1,3,4', 1, 0.2]];
 cache.set('BMS:1,2', 'same'); cache.set('BMS:1,3,4,1', 'same');
 context.update_scratch_bars(1, 0);
-assert.equal(context.scratch_bar_count, 1);
-elements[0].click(); assert.equal(clicked, 1);
+assert.equal(context.scratch_bar_count, 2);
 exact.checked = false;
 // The main display follows the selected notation without changing the source.
 const mainFunction = source.slice(source.indexOf('var current_main_sequence = null'), source.indexOf('function num_time('));

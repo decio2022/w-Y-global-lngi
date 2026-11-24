@@ -206,7 +206,7 @@ function progress_bar_label(ord, mode) {
     if (cached !== undefined) return cached
     if (!progress_conversion_worker && !progress_conversion_unavailable) {
         try {
-            progress_conversion_worker = new Worker("progress-conversion-worker.js?v=2")
+            progress_conversion_worker = new Worker("progress-conversion-worker.js")
             progress_conversion_worker.onmessage = ({ data }) => {
                 convert_cache_put(data.key, data.label)
                 progress_conversion_pending = false
@@ -267,10 +267,9 @@ function update_scratch_bars(x, currentSimulatedTime) {
         // Convert even while running, off the animation thread. Pending results
         // temporarily show the capped ω-Y sequence and are reconsidered next frame.
         const label = progress_bar_label(sequence, scratch_bar_display)
-        // Converted notations can truncate independently (e.g. BMS terms),
-        // so different source lengths may still display exactly the same bar.
-        if (exact && seenLabels.has(label)) continue
-        if (exact) seenLabels.add(label)
+        const labelKey = JSON.stringify([label, sequence.split(",").length])
+        if (exact && seenLabels.has(labelKey)) continue
+        if (exact) seenLabels.add(labelKey)
         indices.push(i)
         labels.push(label)
         if (limit && indices.length === 40) break
