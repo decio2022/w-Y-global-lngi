@@ -122,7 +122,7 @@ function setValue(el, value) {
 
 // The bars are not capped at a fixed count: the chain a countdown walks through
 // can be hundreds of bars long (see ntl), so bars are created in chunks as a
-// countdown needs them and hidden again when it no longer does. The array
+// countdown needs them and removed again when it no longer does. The array
 // always holds `scratch_bar_created` reusable display slots. A slot can map to
 // a different countdown index when only the last bars are displayed.
 var scratch_bar_elements = []
@@ -155,10 +155,12 @@ function scratch_bar_ensure(n) {
     }
 }
 
-function hide_scratch_bar(index) {
-    const bar = scratch_bar_elements[index]
-    if (bar) {
-        if (bar.style.display !== "none") bar.style.display = "none"
+// Remove unused slots rather than leaving duplicate/stale bars in the DOM.
+function scratch_bar_trim(count) {
+    while (scratch_bar_created > count) {
+        const index = --scratch_bar_created
+        const bar = scratch_bar_elements.pop()
+        if (bar) bar.remove()
         scratch_bar_label_cache[index] = undefined
         scratch_bar_meta_cache[index] = undefined
     }
@@ -279,13 +281,12 @@ function update_scratch_bars(x, currentSimulatedTime) {
     const count = indices.length
     scratch_bar_ensure(count)
     scratch_bar_count = count
-    for (let slot = count; slot < scratch_bar_created; slot++) hide_scratch_bar(slot)
+    scratch_bar_trim(count)
 
     for (let slot = 0; slot < count; slot++) {
         const i = indices[slot]
         const bar = scratch_bar_elements[slot]
         bar._sequenceIndex = i
-        if (bar.style.display === "none") bar.style.display = ""
         const secondsLeft = i === last ? lt : Math.max(0,
             (get_time_inv(scratch_bar_boundary(i, x)) - currentSimulatedTime) / 1000)
         const label = labels[slot]

@@ -11,7 +11,7 @@ const maxTerms = { valueAsNumber: 0 };
 let conversions = [];
 let clicked;
 function element() {
-    return { style: {}, appendChild() {}, addEventListener(_, fn) { this.click = fn; } };
+    return { style: {}, appendChild() {}, addEventListener(_, fn) { this.click = fn; }, remove() { const i = elements.indexOf(this); if (i !== -1) elements.splice(i, 1); } };
 }
 const context = {
     document: {
@@ -40,7 +40,7 @@ assert.equal(elements.length, 100); assert.equal(conversions.length, 0);
 elements[0].click(); assert.equal(clicked, 0);
 limit.checked = true; chain(10); conversions = [];
 context.update_scratch_bars(1, 0);
-assert.equal(conversions.length, 0); assert.equal(elements[10].style.display, 'none');
+assert.equal(conversions.length, 0); assert.equal(elements.length, 10);
 assert.equal(elements[9]._label.innerHTML, 'ord9,1');
 context.page = 0; conversions = [];
 context.update_scratch_bars(1, 0);
@@ -130,11 +130,32 @@ context.super_list = Array.from({ length: 100 }, (_, i) =>
 context.paused = false;
 context.update_scratch_bars(1, 0);
 assert.equal(context.scratch_bar_count, 1);
+assert.equal(elements.length, 1); // Other bars are actually removed, not just relabelled.
 assert.equal(elements[0]._label.innerHTML, '1,2,4,8,16,25,36,51,67,85');
 elements[0].click(); assert.equal(clicked, 99);
 cache.set('2-shifted OCF:1,2,4,8,16,25,36,51,67,85', '1,2,4,8,16,25,36,51,67,85');
 context.update_scratch_bars(1, 0);
 assert.equal(context.scratch_bar_count, 1);
+// Changing Settings from all terms to 10 while running must immediately
+// remove old rows, without waiting for notation conversion. Distinct prefixes
+// remain visible and the removed rows must not reappear after conversion.
+cache.clear(); maxTerms.valueAsNumber = 0;
+context.super_list = [
+    ['1,2,4,8,16,25,36,51,67,85,11', 0, 0.1],
+    ['1,2,4,8,16,25,36,51,67,85,12', 1, 0.2],
+    ['1,2,4,8,16,25,36,51,67,86,13', 2, 0.3]
+];
+context.update_scratch_bars(1, 0);
+assert.equal(elements.length, 3);
+maxTerms.valueAsNumber = 10;
+context.update_scratch_bars(1, 0);
+assert.equal(elements.length, 2);
+assert.equal(elements[0]._label.innerHTML, '1,2,4,8,16,25,36,51,67,85');
+assert.equal(elements[1]._label.innerHTML, '1,2,4,8,16,25,36,51,67,86');
+elements[0].click(); assert.equal(clicked, 1);
+cache.set('2-shifted OCF:1,2,4,8,16,25,36,51,67,85', '1,2,4,8,16,25,36,51,67,85');
+context.update_scratch_bars(1, 0);
+assert.equal(elements.length, 2);
 // With no term limit, matching labels with different term counts stay distinct.
 maxTerms.valueAsNumber = 0; context.scratch_bar_display = 'BMS';
 context.super_list = [['1,2', 0, 0.1], ['1,3,4', 1, 0.2]];
