@@ -174,11 +174,8 @@ function scratch_bar_init() {
 }
 
 var lt = 0
-// Last notation rendered on each bar. The notation conversion itself is
-// memoized in convert_From_wY(), and a label is only rewritten when its text
-// actually changes, so a frame only pays for labels that are genuinely new
-// instead of re-converting every bar like it used to. Conversions are instant:
-// every bar is converted in the same frame it is needed, with no time budget.
+// Last notation rendered on each bar; conversions are cached and run in a
+// worker so slow notation conversions do not block animation.
 var scratch_bar_label_cache = []
 // Last meta text (percentage / countdown) shown on each bar. The countdown only
 // changes ~10 times a second, so this keeps most frames from touching those
@@ -249,22 +246,49 @@ function update_scratch_bars(x, currentSimulatedTime) {
     if (page != 1) return
 
     const limit = document.getElementById("limit_scratch_bars").checked
-    const start = limit ? Math.max(0, super_list.length - 40) : 0
-    const count = super_list.length - start
+    const exactOption = document.getElementById("exact_scratch_terms")
+    const maxInput = document.getElementById("Y_Terms")
+    const maxTerms = maxInput ? Math.floor(maxInput.valueAsNumber) : 0
+    const exact = exactOption && exactOption.checked
+    const indices = []
+    const labels = []
+    const seenSequences = new Set()
+    const seenLabels = new Set()
+    // Keep the most recent occurrence so its countdown and click target remain useful.
+    for (let i = super_list.length - 1; i >= 0; i--) {
+        let sequence = scratch_bar_sequence(i)
+        if (exact) {
+            const terms = sequence.split(",")
+            if (maxTerms > 0 && terms.length < maxTerms) continue
+            if (maxTerms > 0) sequence = terms.slice(0, maxTerms).join(",")
+            if (seenSequences.has(sequence)) continue
+            seenSequences.add(sequence)
+        }
+        // Convert even while running, off the animation thread. Pending results
+        // temporarily show the capped ω-Y sequence and are reconsidered next frame.
+        const label = progress_bar_label(sequence, scratch_bar_display)
+        const labelKey = JSON.stringify([label, sequence.split(",").length])
+        if (exact && seenLabels.has(labelKey)) continue
+        if (exact) seenLabels.add(labelKey)
+        indices.push(i)
+        labels.push(label)
+        if (limit && indices.length === 40) break
+    }
+    indices.reverse()
+    labels.reverse()
+    const count = indices.length
     scratch_bar_ensure(count)
     scratch_bar_count = count
     for (let slot = count; slot < scratch_bar_created; slot++) hide_scratch_bar(slot)
 
     for (let slot = 0; slot < count; slot++) {
-        const i = start + slot
+        const i = indices[slot]
         const bar = scratch_bar_elements[slot]
         bar._sequenceIndex = i
         if (bar.style.display === "none") bar.style.display = ""
         const secondsLeft = i === last ? lt : Math.max(0,
             (get_time_inv(scratch_bar_boundary(i, x)) - currentSimulatedTime) / 1000)
-        const ordText = scratch_bar_sequence(i)
-        const label = isPaused() && scratch_bar_display !== "wY"
-            ? progress_bar_label(ordText, scratch_bar_display) : ordText
+        const label = labels[slot]
         if (label !== scratch_bar_label_cache[slot]) {
             scratch_bar_label_cache[slot] = label
             bar._label.innerHTML = label
@@ -596,7 +620,11 @@ renderAnalysisPanels();
 // dozens of labels during a frame.
 var current_main_sequence = null
 function main_sequence_label(sequence) {
-    return scratch_bar_display === "wY" ? `<i>${sequence}</i>` : convert_From_wY(sequence, scratch_bar_display)
+    if (scratch_bar_display === "wY") return `<i>${sequence}</i>`
+    // 2-shifted OCF can be extremely expensive beyond 1,2,4,8,13.
+    // Never run it on the animation thread, even for the main display.
+    if (scratch_bar_display === "2-shifted OCF") return progress_bar_label(sequence, scratch_bar_display)
+    return convert_From_wY(sequence, scratch_bar_display)
 }
 function refresh_main_notation() {
     if (current_main_sequence !== null) {
@@ -768,7 +796,9 @@ function update() {
                     txt = "<i>" + u[2] + "</i>";
                     break;
                 default:
-                    txt = convert_From_wY(u[2], panel.notation);
+                    txt = panel.notation === "2-shifted OCF"
+                        ? progress_bar_label(u[2], panel.notation)
+                        : convert_From_wY(u[2], panel.notation);
                     break;
             }
             setHTML(panel.element, txt);
