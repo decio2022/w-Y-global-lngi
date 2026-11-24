@@ -247,7 +247,11 @@ function update_scratch_bars(x, currentSimulatedTime) {
     }
     if (page != 1) return
 
-    const limit = document.getElementById("limit_scratch_bars").checked
+    const barLimitInput = document.getElementById("max_scratch_bars")
+    const requestedLimit = barLimitInput ? barLimitInput.valueAsNumber : 0
+    // Zero, invalid and negative values mean no display limit.
+    const barLimit = Number.isFinite(requestedLimit) && requestedLimit >= 1
+        ? Math.floor(requestedLimit) : 0
     const exactOption = document.getElementById("exact_scratch_terms")
     const maxInput = document.getElementById("Y_Terms")
     const maxTerms = maxInput ? Math.floor(maxInput.valueAsNumber) : 0
@@ -269,7 +273,7 @@ function update_scratch_bars(x, currentSimulatedTime) {
         const label = progress_bar_label(sequence, scratch_bar_display)
         indices.push(i)
         labels.push(label)
-        if (limit && indices.length === 40) break
+        if (barLimit && indices.length >= barLimit) break
     }
     indices.reverse()
     labels.reverse()

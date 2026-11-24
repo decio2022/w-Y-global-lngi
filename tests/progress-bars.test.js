@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const source = fs.readFileSync('lngi.js', 'utf8');
 const code = source.slice(source.indexOf('var scratch_bar_elements = []'), source.indexOf('function scratch_bar_jump_target'));
 const elements = [];
-const limit = { checked: true };
+const limit = { valueAsNumber: 40 };
 const exact = { checked: false };
 const maxTerms = { valueAsNumber: 0 };
 let conversions = [];
@@ -15,7 +15,7 @@ function element() {
 }
 const context = {
     document: {
-        getElementById(id) { return id === 'scratch_content' ? { appendChild(el) { elements.push(el); } } : id === 'exact_scratch_terms' ? exact : id === 'Y_Terms' ? maxTerms : limit; },
+        getElementById(id) { return id === 'scratch_content' ? { appendChild(el) { elements.push(el); } } : id === 'exact_scratch_terms' ? exact : id === 'Y_Terms' ? maxTerms : id === 'max_scratch_bars' ? limit : null; },
         createElement: element, createTextNode: () => ({})
     },
     page: 1, scratch_bar_display: 'wY', tt: 0, paused: true,
@@ -34,11 +34,23 @@ assert.equal(conversions.length, 0);
 assert.equal(elements[0]._label.innerHTML, 'ord60');
 assert.equal(elements[39]._label.innerHTML, 'ord99,1');
 elements[0].click(); assert.equal(clicked, 60);
-limit.checked = false; conversions = [];
+// Custom limits keep the most recent bars, without changing the chain.
+limit.valueAsNumber = 3;
+context.update_scratch_bars(1, 0);
+assert.equal(elements.length, 3);
+assert.equal(elements[0]._label.innerHTML, 'ord97');
+elements[0].click(); assert.equal(clicked, 97);
+limit.valueAsNumber = 200;
+context.update_scratch_bars(1, 0);
+assert.equal(elements.length, 100);
+limit.valueAsNumber = NaN;
+context.update_scratch_bars(1, 0);
+assert.equal(elements.length, 100);
+limit.valueAsNumber = 0; conversions = [];
 context.update_scratch_bars(1, 0);
 assert.equal(elements.length, 100); assert.equal(conversions.length, 0);
 elements[0].click(); assert.equal(clicked, 0);
-limit.checked = true; chain(10); conversions = [];
+limit.valueAsNumber = 40; chain(10); conversions = [];
 context.update_scratch_bars(1, 0);
 assert.equal(conversions.length, 0); assert.equal(elements.length, 10);
 assert.equal(elements[9]._label.innerHTML, 'ord9,1');
@@ -47,7 +59,7 @@ context.update_scratch_bars(1, 0);
 assert.equal(conversions.length, 0); assert.ok(context.lt >= 0);
 // Truncate to the configured maximum, retain shorter sequences, and retain the
 // newest countdown when different underlying bars have the same prefix.
-context.page = 1; limit.checked = false; exact.checked = true; maxTerms.valueAsNumber = 2;
+context.page = 1; limit.valueAsNumber = 0; exact.checked = true; maxTerms.valueAsNumber = 2;
 context.super_list = [['1', 0, 0.1], ['1,2,3', 1, 0.2], ['1,3', 2, 0.3], ['1,2,4', 3, 0.4]];
 context.update_scratch_bars(1, 0);
 assert.equal(context.scratch_bar_count, 3);
@@ -65,6 +77,13 @@ context.update_scratch_bars(1, 0);
 assert.equal(context.scratch_bar_count, 3);
 assert.deepEqual(elements.map(el => el._label.innerHTML), ['1,2,4,8', '1,2,4,8,1', '1,2,4,8,2']);
 elements[2].click(); assert.equal(clicked, 3);
+// The limit is applied after deduplication, not to the underlying chain.
+limit.valueAsNumber = 2;
+context.update_scratch_bars(1, 0);
+assert.deepEqual(elements.map(el => el._label.innerHTML), ['1,2,4,8,1', '1,2,4,8,2']);
+elements[0].click(); assert.equal(clicked, 1);
+elements[1].click(); assert.equal(clicked, 3);
+limit.valueAsNumber = 0;
 // The setting in the Settings dialog, not the mountain's MaxTerms input,
 // controls the progress bars. A ten-term limit must truncate longer bars.
 maxTerms.valueAsNumber = 10;
@@ -78,7 +97,7 @@ context.super_list = [['1,2', 0, 0.1], ['1,2', 1, 0.2], ['1,3', 2, 0.3]];
 context.update_scratch_bars(1, 0);
 assert.equal(context.scratch_bar_count, 2);
 elements[0].click(); assert.equal(clicked, 1);
-exact.checked = false; limit.checked = true;
+exact.checked = false; limit.valueAsNumber = 40;
 // OCF labels must not synchronously convert on the animation thread, and the
 // worker must have at most one outstanding request even across many frames.
 const cache = new Map();
@@ -117,7 +136,7 @@ assert.equal(elements[1]._label.innerHTML, 'ord1');
 // Different ω-Y sequences remain distinct even if their converted labels match.
 // Identical capped ω-Y sequences collapse in every notation, running or paused.
 worker.onmessage({ data: { key: worker.requests[2].key, label: 'irrelevant' } });
-exact.checked = true; limit.checked = false; maxTerms.valueAsNumber = 2;
+exact.checked = true; limit.valueAsNumber = 0; maxTerms.valueAsNumber = 2;
 for (const mode of ['wY', 'DBMS', 'BMS', '2-shifted OCF', 'cOCF', 'EcOCF', 'BcOCF', 'PMS', 'AMS', '0Y', 'Vulcaniz']) {
     context.scratch_bar_display = mode;
     context.super_list = [['1,2,3', 0, 0.1], ['1,3,4', 1, 0.2], ['1,2,9', 2, 0.3]];
