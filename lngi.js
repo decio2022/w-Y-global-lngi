@@ -174,11 +174,8 @@ function scratch_bar_init() {
 }
 
 var lt = 0
-// Last notation rendered on each bar. The notation conversion itself is
-// memoized in convert_From_wY(), and a label is only rewritten when its text
-// actually changes, so a frame only pays for labels that are genuinely new
-// instead of re-converting every bar like it used to. Conversions are instant:
-// every bar is converted in the same frame it is needed, with no time budget.
+// Last notation rendered on each bar; conversions are cached and run in a
+// worker so slow notation conversions do not block animation.
 var scratch_bar_label_cache = []
 // Last meta text (percentage / countdown) shown on each bar. The countdown only
 // changes ~10 times a second, so this keeps most frames from touching those
@@ -250,12 +247,13 @@ function update_scratch_bars(x, currentSimulatedTime) {
 
     const limit = document.getElementById("limit_scratch_bars").checked
     const exactOption = document.getElementById("exact_scratch_terms")
-    const maxInput = document.getElementById("MaxTerms")
+    const maxInput = document.getElementById("Y_Terms")
     const maxTerms = maxInput ? Math.floor(maxInput.valueAsNumber) : 0
     const exact = exactOption && exactOption.checked
     const indices = []
-    const sequences = []
-    const seen = new Set()
+    const labels = []
+    const seenSequences = new Set()
+    const seenLabels = new Set()
     // Keep the most recent occurrence so its countdown and click target remain useful.
     for (let i = super_list.length - 1; i >= 0; i--) {
         let sequence = scratch_bar_sequence(i)
@@ -263,15 +261,21 @@ function update_scratch_bars(x, currentSimulatedTime) {
             const terms = sequence.split(",")
             if (maxTerms > 0 && terms.length < maxTerms) continue
             if (maxTerms > 0) sequence = terms.slice(0, maxTerms).join(",")
-            if (seen.has(sequence)) continue
-            seen.add(sequence)
+            if (seenSequences.has(sequence)) continue
+            seenSequences.add(sequence)
         }
+        // Convert even while running, off the animation thread. Pending results
+        // temporarily show the capped ω-Y sequence and are reconsidered next frame.
+        const label = progress_bar_label(sequence, scratch_bar_display)
+        const labelKey = JSON.stringify([label, sequence.split(",").length])
+        if (exact && seenLabels.has(labelKey)) continue
+        if (exact) seenLabels.add(labelKey)
         indices.push(i)
-        sequences.push(sequence)
+        labels.push(label)
         if (limit && indices.length === 40) break
     }
     indices.reverse()
-    sequences.reverse()
+    labels.reverse()
     const count = indices.length
     scratch_bar_ensure(count)
     scratch_bar_count = count
@@ -284,9 +288,7 @@ function update_scratch_bars(x, currentSimulatedTime) {
         if (bar.style.display === "none") bar.style.display = ""
         const secondsLeft = i === last ? lt : Math.max(0,
             (get_time_inv(scratch_bar_boundary(i, x)) - currentSimulatedTime) / 1000)
-        const ordText = sequences[slot]
-        const label = isPaused() && scratch_bar_display !== "wY"
-            ? progress_bar_label(ordText, scratch_bar_display) : ordText
+        const label = labels[slot]
         if (label !== scratch_bar_label_cache[slot]) {
             scratch_bar_label_cache[slot] = label
             bar._label.innerHTML = label
