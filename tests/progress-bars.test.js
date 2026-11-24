@@ -124,9 +124,10 @@ assert.equal(conversions.length, 0);
 assert.equal(worker.requests.length, 1);
 assert.equal(worker.requests[0].ord, 'ord0');
 worker.onmessage({ data: { key: worker.requests[0].key, label: 'converted' } });
-context.update_scratch_bars(1, 0);
+// Results render and the next request starts immediately, without a frame.
 assert.equal(elements[0]._label.innerHTML, 'converted');
 assert.equal(worker.requests.length, 2);
+context.update_scratch_bars(1, 0);
 assert.equal(worker.requests[1].ord, 'ord1');
 // A late result for a previous chain is cached but never applied to a new bar.
 context.super_list = Array.from({ length: 10 }, (_, i) => [`new${i}`, i, 0.5]);
@@ -209,8 +210,7 @@ assert.equal(barWorker.requests.length, barRequestsBefore + 1);
 assert.equal(elements[0]._label.innerHTML, 'Converting…');
 const request = barWorker.requests.at(-1);
 barWorker.onmessage({ data: { key: request.key, label: 'converted bar' } });
-// The main worker is still busy, but the bar conversion can finish.
-context.update_scratch_bars(1, 0);
+// The main worker is still busy, but the bar updates without another frame.
 assert.equal(elements[0]._label.innerHTML, 'converted bar');
 assert.equal(mainWorker.requests.length, 1);
 // The main display follows the selected notation without changing the source.

@@ -215,6 +215,7 @@ function progress_bar_label(ord, mode, laneName = "bar") {
             lane.worker.onmessage = ({ data }) => {
                 convert_cache_put(data.key, data.label)
                 lane.pending = false
+                if (laneName === "bar") progress_bar_conversion_finished(data)
             }
             lane.worker.onerror = error => {
                 console.warn("Notation conversion worker failed.", error)
@@ -241,6 +242,31 @@ function progress_bar_label(ord, mode, laneName = "bar") {
     // Do not mistake a temporary ω-Y fallback for a finished OCF conversion.
     if (laneName === "bar") return lane.unavailable ? "Conversion unavailable" : "Converting…"
     return ord
+}
+
+// Apply a completed conversion immediately and start the next currently visible
+// uncached label without waiting for another animation frame. The key check
+// prevents an old result from updating a reused slot or a changed setting.
+function progress_bar_conversion_finished(data) {
+    if (page !== 1) return
+    for (let slot = 0; slot < scratch_bar_count; slot++) {
+        const bar = scratch_bar_elements[slot]
+        if (bar && bar._conversionMode === scratch_bar_display &&
+            bar._conversionKey === data.key &&
+            data.key === "worker:" + convert_cache_key(bar._conversionOrd, bar._conversionMode)) {
+            scratch_bar_label_cache[slot] = data.label
+            bar._label.innerHTML = data.label
+        }
+    }
+    const lane = progress_conversion_lanes.bar
+    for (let slot = 0; slot < scratch_bar_count && !lane.pending; slot++) {
+        const bar = scratch_bar_elements[slot]
+        if (bar && bar._conversionMode === scratch_bar_display && bar._conversionKey &&
+            bar._conversionKey === "worker:" + convert_cache_key(bar._conversionOrd, bar._conversionMode) &&
+            convert_cache.get(bar._conversionKey) === undefined) {
+            progress_bar_label(bar._conversionOrd, bar._conversionMode)
+        }
+    }
 }
 
 function update_scratch_bars(x, currentSimulatedTime) {
@@ -290,6 +316,10 @@ function update_scratch_bars(x, currentSimulatedTime) {
         const secondsLeft = i === last ? lt : Math.max(0,
             (get_time_inv(scratch_bar_boundary(i, x)) - currentSimulatedTime) / 1000)
         // Convert only displayed bars, off the animation thread.
+        bar._conversionOrd = sequences[slot]
+        bar._conversionMode = scratch_bar_display
+        bar._conversionKey = scratch_bar_display === "wY" ? null
+            : "worker:" + convert_cache_key(sequences[slot], scratch_bar_display)
         const label = progress_bar_label(sequences[slot], scratch_bar_display)
         if (label !== scratch_bar_label_cache[slot]) {
             scratch_bar_label_cache[slot] = label
