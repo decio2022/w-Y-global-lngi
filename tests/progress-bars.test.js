@@ -31,15 +31,15 @@ chain(100);
 context.update_scratch_bars(1, 0);
 assert.equal(elements.length, 40);
 assert.equal(conversions.length, 0);
-assert.equal(elements[0]._label.innerHTML, 'ord60');
-assert.equal(elements[39]._label.innerHTML, 'ord99,1');
-elements[0].click(); assert.equal(clicked, 60);
-// Custom limits keep the most recent bars, without changing the chain.
+assert.equal(elements[0]._label.innerHTML, 'ord0');
+assert.equal(elements[39]._label.innerHTML, 'ord39');
+elements[0].click(); assert.equal(clicked, 0);
+// Custom limits keep the first bars, without changing the chain.
 limit.valueAsNumber = 3;
 context.update_scratch_bars(1, 0);
 assert.equal(elements.length, 3);
-assert.equal(elements[0]._label.innerHTML, 'ord97');
-elements[0].click(); assert.equal(clicked, 97);
+assert.equal(elements[0]._label.innerHTML, 'ord0');
+elements[0].click(); assert.equal(clicked, 0);
 limit.valueAsNumber = 200;
 context.update_scratch_bars(1, 0);
 assert.equal(elements.length, 100);
@@ -80,9 +80,9 @@ elements[2].click(); assert.equal(clicked, 3);
 // The limit is applied after deduplication, not to the underlying chain.
 limit.valueAsNumber = 2;
 context.update_scratch_bars(1, 0);
-assert.deepEqual(elements.map(el => el._label.innerHTML), ['1,2,4,8,1', '1,2,4,8,2']);
-elements[0].click(); assert.equal(clicked, 1);
-elements[1].click(); assert.equal(clicked, 3);
+assert.deepEqual(elements.map(el => el._label.innerHTML), ['1,2,4,8', '1,2,4,8,1']);
+elements[0].click(); assert.equal(clicked, 0);
+elements[1].click(); assert.equal(clicked, 1);
 limit.valueAsNumber = 0;
 // The setting in the Settings dialog, not the mountain's MaxTerms input,
 // controls the progress bars. A ten-term limit must truncate longer bars.
@@ -122,17 +122,17 @@ context.update_scratch_bars(1, 0);
 context.update_scratch_bars(1, 0);
 assert.equal(conversions.length, 0);
 assert.equal(worker.requests.length, 1);
-assert.equal(worker.requests[0].ord, 'ord99,1');
+assert.equal(worker.requests[0].ord, 'ord0');
 worker.onmessage({ data: { key: worker.requests[0].key, label: 'converted' } });
 context.update_scratch_bars(1, 0);
-assert.equal(elements[39]._label.innerHTML, 'converted');
+assert.equal(elements[0]._label.innerHTML, 'converted');
 assert.equal(worker.requests.length, 2);
-assert.equal(worker.requests[1].ord, 'ord98');
+assert.equal(worker.requests[1].ord, 'ord1');
 // A late result for a previous chain is cached but never applied to a new bar.
-chain(10);
+context.super_list = Array.from({ length: 10 }, (_, i) => [`new${i}`, i, 0.5]);
 worker.onmessage({ data: { key: worker.requests[1].key, label: 'stale' } });
 context.update_scratch_bars(1, 0);
-assert.equal(elements[1]._label.innerHTML, 'ord1');
+assert.equal(elements[1]._label.innerHTML, 'new1');
 // Different ω-Y sequences remain distinct even if their converted labels match.
 // Identical capped ω-Y sequences collapse in every notation, running or paused.
 worker.onmessage({ data: { key: worker.requests[2].key, label: 'irrelevant' } });

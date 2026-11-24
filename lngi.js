@@ -257,7 +257,7 @@ function update_scratch_bars(x, currentSimulatedTime) {
     const maxTerms = maxInput ? Math.floor(maxInput.valueAsNumber) : 0
     const exact = exactOption && exactOption.checked
     const indices = []
-    const labels = []
+    const sequences = []
     const seenSequences = new Set()
     // Keep the most recent occurrence so its countdown and click target remain useful.
     for (let i = super_list.length - 1; i >= 0; i--) {
@@ -268,16 +268,13 @@ function update_scratch_bars(x, currentSimulatedTime) {
             if (seenSequences.has(sequence)) continue
             seenSequences.add(sequence)
         }
-        // Convert even while running, off the animation thread. Pending results
-        // temporarily show the capped ω-Y sequence and are reconsidered next frame.
-        const label = progress_bar_label(sequence, scratch_bar_display)
         indices.push(i)
-        labels.push(label)
-        if (barLimit && indices.length >= barLimit) break
+        sequences.push(sequence)
     }
     indices.reverse()
-    labels.reverse()
-    const count = indices.length
+    sequences.reverse()
+    // Apply the limit after deduplication, keeping the first displayed bars.
+    const count = barLimit ? Math.min(barLimit, indices.length) : indices.length
     scratch_bar_ensure(count)
     scratch_bar_count = count
     scratch_bar_trim(count)
@@ -288,7 +285,9 @@ function update_scratch_bars(x, currentSimulatedTime) {
         bar._sequenceIndex = i
         const secondsLeft = i === last ? lt : Math.max(0,
             (get_time_inv(scratch_bar_boundary(i, x)) - currentSimulatedTime) / 1000)
-        const label = labels[slot]
+        // Convert only displayed bars, off the animation thread. Until the
+        // conversion finishes the capped ω-Y sequence is shown instead.
+        const label = progress_bar_label(sequences[slot], scratch_bar_display)
         if (label !== scratch_bar_label_cache[slot]) {
             scratch_bar_label_cache[slot] = label
             bar._label.innerHTML = label
