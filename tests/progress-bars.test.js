@@ -213,6 +213,20 @@ barWorker.onmessage({ data: { key: request.key, label: 'converted bar' } });
 // The main worker is still busy, but the bar updates without another frame.
 assert.equal(elements[0]._label.innerHTML, 'converted bar');
 assert.equal(mainWorker.requests.length, 1);
+// While running, ignored trailing terms must not repeatedly invalidate the
+// requested OCF conversion. Both displays use the same capped cache key.
+maxTerms.valueAsNumber = 2;
+context.progress_conversion_lanes.main.pending = false;
+const first = context.progress_bar_label('1,2,3,4', '2-shifted OCF', 'main');
+assert.equal(first, 'Converting…');
+const normalizedRequest = mainWorker.requests.at(-1);
+assert.equal(normalizedRequest.ord, '1,2');
+mainWorker.onmessage({ data: { key: normalizedRequest.key, label: 'OCF result' } });
+const priorRequests = mainWorker.requests.length;
+assert.equal(context.progress_bar_label('1,2,9,9', '2-shifted OCF', 'main'), 'OCF result');
+assert.equal(context.progress_bar_label('1,2,5,8', '2-shifted OCF', 'bar'), 'OCF result');
+assert.equal(mainWorker.requests.length, priorRequests);
+maxTerms.valueAsNumber = 0;
 // The main display follows the selected notation without changing the source.
 const mainFunction = source.slice(source.indexOf('var current_main_sequence = null'), source.indexOf('function num_time('));
 vm.runInContext(mainFunction, context);
@@ -222,7 +236,7 @@ assert.equal(context.main_sequence_label('1,2,3'), '<i>1,2,3</i>');
 context.scratch_bar_display = 'cOCF';
 assert.equal(context.main_sequence_label('1,2,3'), 'cOCF:1,2,3');
 context.scratch_bar_display = '2-shifted OCF';
-assert.equal(context.main_sequence_label('1,2,4,8,13,1'), '1,2,4,8,13,1');
+assert.equal(context.main_sequence_label('1,2,4,8,13,1'), 'Converting…');
 context.scratch_bar_display = 'BMS';
 assert.equal(context.main_sequence_label('1,2,3'), 'BMS:1,2,3');
 let rendered;

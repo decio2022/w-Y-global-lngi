@@ -202,10 +202,22 @@ var progress_conversion_lanes = {
     main: { worker: null, pending: false, unavailable: false }
 }
 
+// Conversions use only the configured Y terms. Keying by the full sequence
+// caused running progress to miss the cache whenever an ignored term changed.
+function progress_conversion_sequence(ord) {
+    const terms = Y_Terms.valueAsNumber
+    return Number.isFinite(terms) && terms > 0
+        ? ord.split(",").slice(0, Math.floor(terms)).join(",") : ord
+}
+function progress_conversion_key(ord, mode) {
+    return "worker:" + convert_cache_key(progress_conversion_sequence(ord), mode)
+}
+
 function progress_bar_label(ord, mode, laneName = "bar") {
     if (mode === "wY") return ord
     // Keep worker results separate from synchronous conversion fallbacks.
-    const key = "worker:" + convert_cache_key(ord, mode)
+    ord = progress_conversion_sequence(ord)
+    const key = progress_conversion_key(ord, mode)
     const cached = convert_cache.get(key)
     if (cached !== undefined) return cached
     const lane = progress_conversion_lanes[laneName]
@@ -239,9 +251,8 @@ function progress_bar_label(ord, mode, laneName = "bar") {
             }
         })
     }
-    // Do not mistake a temporary ω-Y fallback for a finished OCF conversion.
-    if (laneName === "bar") return lane.unavailable ? "Conversion unavailable" : "Converting…"
-    return ord
+    // Never present a raw ω-Y sequence as a completed notation conversion.
+    return lane.unavailable ? "Conversion unavailable" : "Converting…"
 }
 
 // Apply a completed conversion immediately and start the next currently visible
@@ -253,7 +264,7 @@ function progress_bar_conversion_finished(data) {
         const bar = scratch_bar_elements[slot]
         if (bar && bar._conversionMode === scratch_bar_display &&
             bar._conversionKey === data.key &&
-            data.key === "worker:" + convert_cache_key(bar._conversionOrd, bar._conversionMode)) {
+            data.key === progress_conversion_key(bar._conversionOrd, bar._conversionMode)) {
             scratch_bar_label_cache[slot] = data.label
             bar._label.innerHTML = data.label
         }
@@ -262,7 +273,7 @@ function progress_bar_conversion_finished(data) {
     for (let slot = 0; slot < scratch_bar_count && !lane.pending; slot++) {
         const bar = scratch_bar_elements[slot]
         if (bar && bar._conversionMode === scratch_bar_display && bar._conversionKey &&
-            bar._conversionKey === "worker:" + convert_cache_key(bar._conversionOrd, bar._conversionMode) &&
+            bar._conversionKey === progress_conversion_key(bar._conversionOrd, bar._conversionMode) &&
             convert_cache.get(bar._conversionKey) === undefined) {
             progress_bar_label(bar._conversionOrd, bar._conversionMode)
         }
@@ -319,7 +330,7 @@ function update_scratch_bars(x, currentSimulatedTime) {
         bar._conversionOrd = sequences[slot]
         bar._conversionMode = scratch_bar_display
         bar._conversionKey = scratch_bar_display === "wY" ? null
-            : "worker:" + convert_cache_key(sequences[slot], scratch_bar_display)
+            : progress_conversion_key(sequences[slot], scratch_bar_display)
         const label = progress_bar_label(sequences[slot], scratch_bar_display)
         if (label !== scratch_bar_label_cache[slot]) {
             scratch_bar_label_cache[slot] = label
