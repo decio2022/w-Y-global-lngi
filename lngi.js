@@ -249,20 +249,42 @@ function update_scratch_bars(x, currentSimulatedTime) {
     if (page != 1) return
 
     const limit = document.getElementById("limit_scratch_bars").checked
-    const start = limit ? Math.max(0, super_list.length - 40) : 0
-    const count = super_list.length - start
+    const exactOption = document.getElementById("exact_scratch_terms")
+    const maxInput = document.getElementById("MaxTerms")
+    const maxTerms = maxInput ? Math.floor(maxInput.valueAsNumber) : 0
+    const exact = exactOption && exactOption.checked
+    const indices = []
+    const sequences = []
+    const seen = new Set()
+    // Keep the most recent occurrence so its countdown and click target remain useful.
+    for (let i = super_list.length - 1; i >= 0; i--) {
+        let sequence = scratch_bar_sequence(i)
+        if (exact) {
+            const terms = sequence.split(",")
+            if (maxTerms > 0 && terms.length < maxTerms) continue
+            if (maxTerms > 0) sequence = terms.slice(0, maxTerms).join(",")
+            if (seen.has(sequence)) continue
+            seen.add(sequence)
+        }
+        indices.push(i)
+        sequences.push(sequence)
+        if (limit && indices.length === 40) break
+    }
+    indices.reverse()
+    sequences.reverse()
+    const count = indices.length
     scratch_bar_ensure(count)
     scratch_bar_count = count
     for (let slot = count; slot < scratch_bar_created; slot++) hide_scratch_bar(slot)
 
     for (let slot = 0; slot < count; slot++) {
-        const i = start + slot
+        const i = indices[slot]
         const bar = scratch_bar_elements[slot]
         bar._sequenceIndex = i
         if (bar.style.display === "none") bar.style.display = ""
         const secondsLeft = i === last ? lt : Math.max(0,
             (get_time_inv(scratch_bar_boundary(i, x)) - currentSimulatedTime) / 1000)
-        const ordText = scratch_bar_sequence(i)
+        const ordText = sequences[slot]
         const label = isPaused() && scratch_bar_display !== "wY"
             ? progress_bar_label(ordText, scratch_bar_display) : ordText
         if (label !== scratch_bar_label_cache[slot]) {
@@ -596,7 +618,11 @@ renderAnalysisPanels();
 // dozens of labels during a frame.
 var current_main_sequence = null
 function main_sequence_label(sequence) {
-    return scratch_bar_display === "wY" ? `<i>${sequence}</i>` : convert_From_wY(sequence, scratch_bar_display)
+    if (scratch_bar_display === "wY") return `<i>${sequence}</i>`
+    // 2-shifted OCF can be extremely expensive beyond 1,2,4,8,13.
+    // Never run it on the animation thread, even for the main display.
+    if (scratch_bar_display === "2-shifted OCF") return progress_bar_label(sequence, scratch_bar_display)
+    return convert_From_wY(sequence, scratch_bar_display)
 }
 function refresh_main_notation() {
     if (current_main_sequence !== null) {
@@ -768,7 +794,9 @@ function update() {
                     txt = "<i>" + u[2] + "</i>";
                     break;
                 default:
-                    txt = convert_From_wY(u[2], panel.notation);
+                    txt = panel.notation === "2-shifted OCF"
+                        ? progress_bar_label(u[2], panel.notation)
+                        : convert_From_wY(u[2], panel.notation);
                     break;
             }
             setHTML(panel.element, txt);

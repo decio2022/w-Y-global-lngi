@@ -6,6 +6,8 @@ const source = fs.readFileSync('lngi.js', 'utf8');
 const code = source.slice(source.indexOf('var scratch_bar_elements = []'), source.indexOf('function scratch_bar_jump_target'));
 const elements = [];
 const limit = { checked: true };
+const exact = { checked: false };
+const maxTerms = { valueAsNumber: 0 };
 let conversions = [];
 let clicked;
 function element() {
@@ -13,7 +15,7 @@ function element() {
 }
 const context = {
     document: {
-        getElementById(id) { return id === 'scratch_content' ? { appendChild(el) { elements.push(el); } } : limit; },
+        getElementById(id) { return id === 'scratch_content' ? { appendChild(el) { elements.push(el); } } : id === 'exact_scratch_terms' ? exact : id === 'MaxTerms' ? maxTerms : limit; },
         createElement: element, createTextNode: () => ({})
     },
     page: 1, scratch_bar_display: 'wY', tt: 0, paused: true,
@@ -43,6 +45,21 @@ assert.equal(elements[9]._label.innerHTML, 'ord9,1');
 context.page = 0; conversions = [];
 context.update_scratch_bars(1, 0);
 assert.equal(conversions.length, 0); assert.ok(context.lt >= 0);
+// Truncate to the configured maximum, omit shorter sequences, and retain the
+// newest countdown when different underlying bars have the same prefix.
+context.page = 1; limit.checked = false; exact.checked = true; maxTerms.valueAsNumber = 2;
+context.super_list = [['1', 0, 0.1], ['1,2,3', 1, 0.2], ['1,3', 2, 0.3], ['1,2,4', 3, 0.4]];
+context.update_scratch_bars(1, 0);
+assert.equal(context.scratch_bar_count, 2);
+assert.equal(elements[0]._label.innerHTML, '1,3');
+assert.equal(elements[1]._label.innerHTML, '1,2');
+elements[1].click(); assert.equal(clicked, 3);
+maxTerms.valueAsNumber = 0;
+context.super_list = [['1,2', 0, 0.1], ['1,2', 1, 0.2], ['1,3', 2, 0.3]];
+context.update_scratch_bars(1, 0);
+assert.equal(context.scratch_bar_count, 2);
+elements[0].click(); assert.equal(clicked, 1);
+exact.checked = false; limit.checked = true;
 // OCF labels must not synchronously convert on the animation thread, and the
 // worker must have at most one outstanding request even across many frames.
 const cache = new Map();
@@ -93,6 +110,8 @@ context.scratch_bar_display = 'wY';
 assert.equal(context.main_sequence_label('1,2,3'), '<i>1,2,3</i>');
 context.scratch_bar_display = 'cOCF';
 assert.equal(context.main_sequence_label('1,2,3'), 'cOCF:1,2,3');
+context.scratch_bar_display = '2-shifted OCF';
+assert.equal(context.main_sequence_label('1,2,4,8,13,1'), '1,2,4,8,13,1');
 context.scratch_bar_display = 'BMS';
 assert.equal(context.main_sequence_label('1,2,3'), 'BMS:1,2,3');
 let rendered;
