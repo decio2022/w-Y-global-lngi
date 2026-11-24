@@ -19,4 +19,13 @@ for (const mode of ['2-shifted OCF', 'cOCF', 'EcOCF', 'BcOCF', 'BMS', 'DBMS', 'P
     worker.onmessage({ data: { key: mode, ord: '1,2,3', mode, settings: { ...settings, format: false } } });
     if (['cOCF', 'EcOCF', 'BcOCF'].includes(mode)) assert.notEqual(reply.label, formatted);
 }
+// Unsupported 2-shifted OCF sequences must not masquerade as converted OCF.
+const outside = '1,2,4,8,16,25,36,51,67,85';
+worker.onmessage({ data: { key: 'outside', ord: outside, mode: '2-shifted OCF', settings } });
+assert.match(reply.label, /outside 2-shifted OCF range/);
+assert.match(reply.label, /ω-Y: 1,2,4,8,16/);
+for (const mode of ['cOCF', 'EcOCF', 'BcOCF']) {
+    worker.onmessage({ data: { key: mode, ord: '1,3', mode, settings } });
+    assert.match(reply.label, /outside .* range/);
+}
 console.log('Progress conversion worker tests passed');

@@ -132,7 +132,7 @@ assert.equal(worker.requests[1].ord, 'ord1');
 context.super_list = Array.from({ length: 10 }, (_, i) => [`new${i}`, i, 0.5]);
 worker.onmessage({ data: { key: worker.requests[1].key, label: 'stale' } });
 context.update_scratch_bars(1, 0);
-assert.equal(elements[1]._label.innerHTML, 'new1');
+assert.equal(elements[1]._label.innerHTML, 'Converting…');
 // Different ω-Y sequences remain distinct even if their converted labels match.
 // Identical capped ω-Y sequences collapse in every notation, running or paused.
 worker.onmessage({ data: { key: worker.requests[2].key, label: 'irrelevant' } });
@@ -141,8 +141,8 @@ for (const mode of ['wY', 'DBMS', 'BMS', '2-shifted OCF', 'cOCF', 'EcOCF', 'BcOC
     context.scratch_bar_display = mode;
     context.super_list = [['1,2,3', 0, 0.1], ['1,3,4', 1, 0.2], ['1,2,9', 2, 0.3]];
     if (mode !== 'wY') {
-        cache.set(`${mode}:1,2`, 'same');
-        cache.set(`${mode}:1,3`, 'same');
+        cache.set(`worker:${mode}:1,2`, 'same');
+        cache.set(`worker:${mode}:1,3`, 'same');
     }
     for (const paused of [false, true]) {
         context.paused = paused;
@@ -161,9 +161,9 @@ context.paused = false;
 context.update_scratch_bars(1, 0);
 assert.equal(context.scratch_bar_count, 1);
 assert.equal(elements.length, 1); // Other bars are actually removed, not just relabelled.
-assert.equal(elements[0]._label.innerHTML, '1,2,4,8,16,25,36,51,67,85');
+assert.equal(elements[0]._label.innerHTML, 'Converting…');
 elements[0].click(); assert.equal(clicked, 99);
-cache.set('2-shifted OCF:1,2,4,8,16,25,36,51,67,85', '1,2,4,8,16,25,36,51,67,85');
+cache.set('worker:2-shifted OCF:1,2,4,8,16,25,36,51,67,85', '1,2,4,8,16,25,36,51,67,85');
 context.update_scratch_bars(1, 0);
 assert.equal(context.scratch_bar_count, 1);
 // Changing Settings from all terms to 10 while running must immediately
@@ -180,19 +180,39 @@ assert.equal(elements.length, 3);
 maxTerms.valueAsNumber = 10;
 context.update_scratch_bars(1, 0);
 assert.equal(elements.length, 2);
-assert.equal(elements[0]._label.innerHTML, '1,2,4,8,16,25,36,51,67,85');
-assert.equal(elements[1]._label.innerHTML, '1,2,4,8,16,25,36,51,67,86');
+assert.equal(elements[0]._label.innerHTML, 'Converting…');
+assert.equal(elements[1]._label.innerHTML, 'Converting…');
 elements[0].click(); assert.equal(clicked, 1);
-cache.set('2-shifted OCF:1,2,4,8,16,25,36,51,67,85', '1,2,4,8,16,25,36,51,67,85');
+cache.set('worker:2-shifted OCF:1,2,4,8,16,25,36,51,67,85', '1,2,4,8,16,25,36,51,67,85');
 context.update_scratch_bars(1, 0);
 assert.equal(elements.length, 2);
 // With no term limit, matching labels with different term counts stay distinct.
 maxTerms.valueAsNumber = 0; context.scratch_bar_display = 'BMS';
 context.super_list = [['1,2', 0, 0.1], ['1,3,4', 1, 0.2]];
-cache.set('BMS:1,2', 'same'); cache.set('BMS:1,3,4,1', 'same');
+cache.set('worker:BMS:1,2', 'same'); cache.set('worker:BMS:1,3,4,1', 'same');
 context.update_scratch_bars(1, 0);
 assert.equal(context.scratch_bar_count, 2);
 exact.checked = false;
+// A busy main sequence must not consume the bar worker's request slot.
+// This reproduces running 2-shifted OCF with a changing main sequence.
+const barWorker = worker;
+context.progress_conversion_lanes.bar.pending = false;
+context.scratch_bar_display = '2-shifted OCF'; exact.checked = false;
+limit.valueAsNumber = 0; context.super_list = [['1,2,3', 0, 0.1]];
+context.progress_bar_label('1,2,4,8,12', '2-shifted OCF', 'main');
+const mainWorker = worker;
+assert.notEqual(mainWorker, barWorker);
+assert.equal(mainWorker.requests.length, 1);
+const barRequestsBefore = barWorker.requests.length;
+context.update_scratch_bars(1, 0);
+assert.equal(barWorker.requests.length, barRequestsBefore + 1);
+assert.equal(elements[0]._label.innerHTML, 'Converting…');
+const request = barWorker.requests.at(-1);
+barWorker.onmessage({ data: { key: request.key, label: 'converted bar' } });
+// The main worker is still busy, but the bar conversion can finish.
+context.update_scratch_bars(1, 0);
+assert.equal(elements[0]._label.innerHTML, 'converted bar');
+assert.equal(mainWorker.requests.length, 1);
 // The main display follows the selected notation without changing the source.
 const mainFunction = source.slice(source.indexOf('var current_main_sequence = null'), source.indexOf('function num_time('));
 vm.runInContext(mainFunction, context);

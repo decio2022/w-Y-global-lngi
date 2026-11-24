@@ -16,5 +16,18 @@ self.onmessage = ({ data }) => {
     workerInputs.BMS_Terms.valueAsNumber = settings.bmsTerms;
     compress_BMS.checked = settings.compress;
     format_cOCF.checked = settings.format;
+    const trimmed = trimStringList(ord, settings.yTerms);
+    // The conversion library has hard upper bounds for these notations.
+    // Make its ω-Y fallback explicit instead of presenting it as OCF.
+    const ocfLimits = {
+        '2-shifted OCF': '1,2,4,8,13',
+        cOCF: '1,2,4,8,16,26',
+        EcOCF: '1,2,4,8,16,31',
+        BcOCF: '1,2,4,8,16,32,64,128,256,512'
+    };
+    if (Object.hasOwn(ocfLimits, mode) && Y_Sequence.cmp(trimmed, ocfLimits[mode]) !== -1) {
+        self.postMessage({ key, label: `ω-Y: ${trimmed} (outside ${mode} range)` });
+        return;
+    }
     self.postMessage({ key, label: convert_From_wY(ord, mode) });
 };

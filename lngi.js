@@ -194,40 +194,43 @@ function scratch_bar_boundary(i, x) {
     return x + remaining * 2 ** (1 - steps)
 }
 
-// Notation conversions can take longer than a frame even for a single label. Keep
-// just one worker request in flight; the next frame chooses from the current
-// bars, so scrolling/time/setting changes cannot build an obsolete backlog.
-var progress_conversion_worker = null
-var progress_conversion_pending = false
-var progress_conversion_unavailable = false
+// Main and progress bars need separate workers: the main sequence can change
+// every frame and otherwise monopolize the single in-flight conversion slot.
+// Each worker has at most one request in flight, so obsolete work cannot queue.
+var progress_conversion_lanes = {
+    bar: { worker: null, pending: false, unavailable: false },
+    main: { worker: null, pending: false, unavailable: false }
+}
 
-function progress_bar_label(ord, mode) {
+function progress_bar_label(ord, mode, laneName = "bar") {
     if (mode === "wY") return ord
-    const key = convert_cache_key(ord, mode)
+    // Keep worker results separate from synchronous conversion fallbacks.
+    const key = "worker:" + convert_cache_key(ord, mode)
     const cached = convert_cache.get(key)
     if (cached !== undefined) return cached
-    if (!progress_conversion_worker && !progress_conversion_unavailable) {
+    const lane = progress_conversion_lanes[laneName]
+    if (!lane.worker && !lane.unavailable) {
         try {
-            progress_conversion_worker = new Worker("progress-conversion-worker.js")
-            progress_conversion_worker.onmessage = ({ data }) => {
+            lane.worker = new Worker("progress-conversion-worker.js")
+            lane.worker.onmessage = ({ data }) => {
                 convert_cache_put(data.key, data.label)
-                progress_conversion_pending = false
+                lane.pending = false
             }
-            progress_conversion_worker.onerror = error => {
-                console.warn("Progress bar conversion worker failed; showing ω-Y labels.", error)
-                progress_conversion_worker.terminate()
-                progress_conversion_worker = null
-                progress_conversion_pending = false
-                progress_conversion_unavailable = true
+            lane.worker.onerror = error => {
+                console.warn("Notation conversion worker failed.", error)
+                lane.worker.terminate()
+                lane.worker = null
+                lane.pending = false
+                lane.unavailable = true
             }
         } catch (error) {
-            console.warn("Progress bar conversion worker unavailable; showing ω-Y labels.", error)
-            progress_conversion_unavailable = true
+            console.warn("Notation conversion worker unavailable.", error)
+            lane.unavailable = true
         }
     }
-    if (progress_conversion_worker && !progress_conversion_pending) {
-        progress_conversion_pending = true
-        progress_conversion_worker.postMessage({
+    if (lane.worker && !lane.pending) {
+        lane.pending = true
+        lane.worker.postMessage({
             key, ord, mode,
             settings: {
                 yTerms: Y_Terms.valueAsNumber, bmsTerms: BMS_Terms.valueAsNumber,
@@ -235,7 +238,8 @@ function progress_bar_label(ord, mode) {
             }
         })
     }
-    // Show the correct raw sequence while its notation is being calculated.
+    // Do not mistake a temporary ω-Y fallback for a finished OCF conversion.
+    if (laneName === "bar") return lane.unavailable ? "Conversion unavailable" : "Converting…"
     return ord
 }
 
@@ -285,8 +289,7 @@ function update_scratch_bars(x, currentSimulatedTime) {
         bar._sequenceIndex = i
         const secondsLeft = i === last ? lt : Math.max(0,
             (get_time_inv(scratch_bar_boundary(i, x)) - currentSimulatedTime) / 1000)
-        // Convert only displayed bars, off the animation thread. Until the
-        // conversion finishes the capped ω-Y sequence is shown instead.
+        // Convert only displayed bars, off the animation thread.
         const label = progress_bar_label(sequences[slot], scratch_bar_display)
         if (label !== scratch_bar_label_cache[slot]) {
             scratch_bar_label_cache[slot] = label
@@ -622,7 +625,7 @@ function main_sequence_label(sequence) {
     if (scratch_bar_display === "wY") return `<i>${sequence}</i>`
     // 2-shifted OCF can be extremely expensive beyond 1,2,4,8,13.
     // Never run it on the animation thread, even for the main display.
-    if (scratch_bar_display === "2-shifted OCF") return progress_bar_label(sequence, scratch_bar_display)
+    if (scratch_bar_display === "2-shifted OCF") return progress_bar_label(sequence, scratch_bar_display, "main")
     return convert_From_wY(sequence, scratch_bar_display)
 }
 function refresh_main_notation() {
@@ -796,7 +799,7 @@ function update() {
                     break;
                 default:
                     txt = panel.notation === "2-shifted OCF"
-                        ? progress_bar_label(u[2], panel.notation)
+                        ? progress_bar_label(u[2], panel.notation, "main")
                         : convert_From_wY(u[2], panel.notation);
                     break;
             }
