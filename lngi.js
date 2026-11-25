@@ -315,6 +315,7 @@ function scratch_pagination_init() {
     }
     const autoConvert = document.getElementById("auto_convert_running_bars")
     if (autoConvert) {
+        autoConvert.addEventListener("input", () => refresh_scratch_bars_now())
         autoConvert.addEventListener("change", () => refresh_scratch_bars_now())
     }
 }
@@ -348,7 +349,10 @@ function update_scratch_bars(x, currentSimulatedTime) {
     scratch_bar_count = count
     for (let slot = count; slot < scratch_bar_created; slot++) hide_scratch_bar(slot)
 
-    const convertBars = should_convert_scratch_bars()
+    const autoConvertEl = document.getElementById("auto_convert_running_bars")
+    const instantConvert = scratch_bar_display !== "wY" &&
+        Boolean(autoConvertEl && autoConvertEl.checked)
+    const workerConvert = scratch_bar_display !== "wY" && !instantConvert && isPaused()
 
     for (let slot = 0; slot < count; slot++) {
         const i = start + slot
@@ -358,8 +362,11 @@ function update_scratch_bars(x, currentSimulatedTime) {
         const secondsLeft = i === last ? lt : Math.max(0,
             (get_time_inv(scratch_bar_boundary(i, x)) - currentSimulatedTime) / 1000)
         const ordText = scratch_bar_sequence(i)
-        const label = convertBars
-            ? progress_bar_label(ordText, scratch_bar_display) : ordText
+        const label = instantConvert
+            ? convert_From_wY(ordText, scratch_bar_display)
+            : workerConvert
+                ? progress_bar_label(ordText, scratch_bar_display)
+                : ordText
         if (label !== scratch_bar_label_cache[slot]) {
             scratch_bar_label_cache[slot] = label
             bar._label.innerHTML = label

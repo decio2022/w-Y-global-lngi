@@ -213,20 +213,32 @@ context.paused = false;
 context.update_scratch_bars(1, 0);
 assert.equal(elements[0]._label.innerHTML, 'ord50');
 
-// Enabling auto-convert while running converts and shows converted labels even when unpaused.
+// Enabling auto-convert while running converts ALL visible bars instantly in the
+// same frame (even brand-new uncached bars that advance every frame), without
+// showing raw ω-Y sequences first.
+context.convert_From_wY = (s, mode) => { conversions.push([s, mode]); return `instant:${mode}:${s}`; };
 autoConvertInput.checked = true;
+conversions = [];
+context.super_list[99][0] = 'fastAdvancingOrd99';
 context.update_scratch_bars(1, 0);
-assert.equal(elements[0]._label.innerHTML, 'converted');
-assert.equal(worker.requests.length, 2);
-assert.equal(worker.requests[1].ord, 'ord51');
+assert.equal(elements[0]._label.innerHTML, 'instant:cOCF:ord50');
+assert.equal(elements[1]._label.innerHTML, 'instant:cOCF:ord51');
+assert.equal(elements[49]._label.innerHTML, 'instant:cOCF:fastAdvancingOrd99');
+assert.equal(conversions.length, 50);
+assert.equal(worker.requests.length, 2); // Did not queue any new async worker requests
 
 // Disabling auto-convert while running returns to raw ω-Y labels until paused.
 autoConvertInput.checked = false;
 context.update_scratch_bars(1, 0);
 assert.equal(elements[0]._label.innerHTML, 'ord50');
 
-// A late result for a previous chain is cached but never applied to a new bar.
+// When paused with auto-convert off, worker resumes background conversion.
 context.paused = true;
+context.update_scratch_bars(1, 0);
+assert.equal(worker.requests.length, 2);
+assert.equal(worker.requests[1].ord, 'ord51');
+
+// A late result for a previous chain is cached but never applied to a new bar.
 pageInput.value = '0';
 chain(10);
 worker.onmessage({ data: { key: worker.requests[1].key, label: 'stale' } });
