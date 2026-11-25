@@ -484,6 +484,32 @@ h2 {
     width: 70px;
 }
 
+.scratch-pagination-row {
+    flex-wrap: wrap;
+}
+
+#scratch_prev_page,
+#scratch_next_page {
+    padding: 4px 10px;
+    border: 1px solid #bbb;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+}
+
+#scratch_prev_page:hover,
+#scratch_next_page:hover {
+    background: #f0f0f0;
+}
+
+#scratch_page_info {
+    font-weight: bold;
+}
+
+#scratch_page_input {
+    width: 80px;
+}
+
 #time_mode {
     margin-left: auto;
 
