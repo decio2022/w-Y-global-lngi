@@ -120,14 +120,14 @@ function setValue(el, value) {
     el.value = value
 }
 
-// The bars are not capped at a fixed count: the chain a countdown walks through
-// can be hundreds of bars long (see ntl), so bars are created in chunks as a
-// countdown needs them and hidden again when it no longer does. The array
-// always holds `scratch_bar_created` reusable display slots. A slot can map to
-// a different countdown index when only the last bars are displayed.
+// Countdown chains can be arbitrarily long (see ntl), but only one page of up
+// to SCRATCH_BARS_PER_PAGE (50) bars is rendered in the DOM at a time. Each
+// reusable display slot maps to the current page's sequence index.
 var scratch_bar_elements = []
 var scratch_bar_count = 0
 var scratch_bar_created = 0
+const SCRATCH_BARS_PER_PAGE = 50
+var scratch_bar_page = 1
 
 function scratch_bar_ensure(n) {
     const content = document.getElementById("scratch_content")
@@ -202,6 +202,13 @@ var progress_conversion_worker = null
 var progress_conversion_pending = false
 var progress_conversion_unavailable = false
 
+function should_convert_scratch_bars() {
+    if (scratch_bar_display === "wY") return false
+    if (isPaused()) return true
+    const autoConvert = document.getElementById("auto_convert_running_bars")
+    return Boolean(autoConvert && autoConvert.checked)
+}
+
 function progress_bar_label(ord, mode) {
     if (mode === "wY") return ord
     const key = convert_cache_key(ord, mode)
@@ -213,6 +220,9 @@ function progress_bar_label(ord, mode) {
             progress_conversion_worker.onmessage = ({ data }) => {
                 convert_cache_put(data.key, data.label)
                 progress_conversion_pending = false
+                if (page == 1 && should_convert_scratch_bars()) {
+                    refresh_scratch_bars_now()
+                }
             }
             progress_conversion_worker.onerror = error => {
                 console.warn("Progress bar conversion worker failed; showing ω-Y labels.", error)
@@ -240,6 +250,76 @@ function progress_bar_label(ord, mode) {
     return ord
 }
 
+function scratch_bar_total_pages() {
+    return Math.max(1, Math.ceil(super_list.length / SCRATCH_BARS_PER_PAGE))
+}
+
+function scratch_bar_input_page() {
+    const input = document.getElementById("scratch_page_input")
+    if (!input) return 0
+    const raw = Number(input.value)
+    if (!Number.isFinite(raw)) return 0
+    const pageNum = Math.floor(raw)
+    return pageNum >= 1 ? pageNum : 0
+}
+
+function scratch_bar_current_page() {
+    const totalPages = scratch_bar_total_pages()
+    const inputPage = scratch_bar_input_page()
+    const targetPage = inputPage >= 1 ? inputPage : scratch_bar_page
+    return Math.min(Math.max(1, targetPage), totalPages)
+}
+
+function refresh_scratch_bars_now() {
+    if (
+        typeof get_time === "function" &&
+        typeof virtualElapsed === "number" &&
+        typeof timeOffset === "number" &&
+        virtualElapsed + timeOffset > 0
+    ) {
+        const simTime = virtualElapsed + timeOffset
+        update_scratch_bars(get_time(simTime), simTime)
+    }
+}
+
+function advance_scratch_bar_page(step = 1) {
+    const totalPages = scratch_bar_total_pages()
+    const current = scratch_bar_current_page()
+    scratch_bar_page = ((current - 1 + step) % totalPages + totalPages) % totalPages + 1
+    const input = document.getElementById("scratch_page_input")
+    if (input && scratch_bar_input_page() !== 0) {
+        input.value = "0"
+    }
+    const content = document.getElementById("scratch_content")
+    if (content) content.scrollTop = 0
+    refresh_scratch_bars_now()
+    return scratch_bar_page
+}
+
+function scratch_pagination_init() {
+    const prevBtn = document.getElementById("scratch_prev_page")
+    if (prevBtn) {
+        prevBtn.addEventListener("click", () => advance_scratch_bar_page(-1))
+    }
+    const nextBtn = document.getElementById("scratch_next_page")
+    if (nextBtn) {
+        nextBtn.addEventListener("click", () => advance_scratch_bar_page(1))
+    }
+    const pageInput = document.getElementById("scratch_page_input")
+    if (pageInput) {
+        pageInput.addEventListener("input", () => {
+            const content = document.getElementById("scratch_content")
+            if (content) content.scrollTop = 0
+            refresh_scratch_bars_now()
+        })
+    }
+    const autoConvert = document.getElementById("auto_convert_running_bars")
+    if (autoConvert) {
+        autoConvert.addEventListener("input", () => refresh_scratch_bars_now())
+        autoConvert.addEventListener("change", () => refresh_scratch_bars_now())
+    }
+}
+
 function update_scratch_bars(x, currentSimulatedTime) {
     // The final countdown controls the main bar even outside the progress page.
     const last = super_list.length - 1
@@ -248,12 +328,31 @@ function update_scratch_bars(x, currentSimulatedTime) {
     }
     if (page != 1) return
 
-    const limit = document.getElementById("limit_scratch_bars").checked
-    const start = limit ? Math.max(0, super_list.length - 40) : 0
-    const count = super_list.length - start
+    const totalBars = super_list.length
+    const totalPages = scratch_bar_total_pages()
+    const currentPage = scratch_bar_current_page()
+    const start = (currentPage - 1) * SCRATCH_BARS_PER_PAGE
+    const count = Math.max(0, Math.min(SCRATCH_BARS_PER_PAGE, totalBars - start))
+
+    const pageInfo = document.getElementById("scratch_page_info")
+    if (pageInfo) {
+        const infoText = totalBars === 0
+            ? "Page 1 / 1 (0 bars)"
+            : `Page ${currentPage} / ${totalPages} (bars ${start + 1}-${start + count} of ${totalBars})`
+        if (pageInfo._lastText !== infoText) {
+            pageInfo._lastText = infoText
+            pageInfo.textContent = infoText
+        }
+    }
+
     scratch_bar_ensure(count)
     scratch_bar_count = count
     for (let slot = count; slot < scratch_bar_created; slot++) hide_scratch_bar(slot)
+
+    const autoConvertEl = document.getElementById("auto_convert_running_bars")
+    const instantConvert = scratch_bar_display !== "wY" &&
+        Boolean(autoConvertEl && autoConvertEl.checked)
+    const workerConvert = scratch_bar_display !== "wY" && !instantConvert && isPaused()
 
     for (let slot = 0; slot < count; slot++) {
         const i = start + slot
@@ -263,8 +362,11 @@ function update_scratch_bars(x, currentSimulatedTime) {
         const secondsLeft = i === last ? lt : Math.max(0,
             (get_time_inv(scratch_bar_boundary(i, x)) - currentSimulatedTime) / 1000)
         const ordText = scratch_bar_sequence(i)
-        const label = isPaused() && scratch_bar_display !== "wY"
-            ? progress_bar_label(ordText, scratch_bar_display) : ordText
+        const label = instantConvert
+            ? convert_From_wY(ordText, scratch_bar_display)
+            : workerConvert
+                ? progress_bar_label(ordText, scratch_bar_display)
+                : ordText
         if (label !== scratch_bar_label_cache[slot]) {
             scratch_bar_label_cache[slot] = label
             bar._label.innerHTML = label
@@ -305,7 +407,9 @@ function scratch_common_terms(a, b) {
 }
 
 function scratch_bar_blocked(i) {
-    var bar = document.getElementById(`bar_${i}`)
+    var bar = scratch_bar_elements.find(
+        el => el && el.style.display !== "none" && el._sequenceIndex === i
+    ) || document.getElementById(`bar_${i}`)
     if (!bar) return
     bar.classList.remove("scratch-bar-blocked")
     void bar.offsetWidth
@@ -382,17 +486,21 @@ function jump_to_scratch_bar(i) {
 }
 
 scratch_bar_init()
+scratch_pagination_init()
 
 var super_list = []
 
 
 // Include last terms up to and including 2048 in the countdown bars.
 const NTL_MAX_LAST_TERM = 2048
-// Keep the existing row budget independent of the last-term limit.
-var NTL_MAX_BARS = 1000
+// Uncapped bar generation before reaching 1,3 (m < 4); once 1,3 is reached
+// (m >= 4), cap the chain back to 100 bars (2 pages of 50 bars).
+var NTL_MAX_BARS = Infinity
+var NTL_MAX_BARS_AFTER_1_3 = 100
 
 function ntl(m) {
     super_list = []
+    var maxBars = m >= 4 ? Math.min(NTL_MAX_BARS, NTL_MAX_BARS_AFTER_1_3) : NTL_MAX_BARS
     var ord = `1,${Math.max(1, Math.floor(m))}`
     var steps = 0
     var m = 1 - (m % 1)
@@ -400,7 +508,7 @@ function ntl(m) {
     // sequence to show (it popped onto one, or stopped at a too-large term), so
     // the closing pop below must not run again.
     var finished = false
-    while (super_list.length < NTL_MAX_BARS) {
+    while (super_list.length < maxBars) {
         super_list.push([ord, steps, m])
         if (m <= 1e-14) {
             break

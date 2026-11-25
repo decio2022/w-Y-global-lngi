@@ -107,12 +107,21 @@
             </select>
         </div>
         <div class="header-row">
-            <small>The main sequence uses this notation. Progress bars show ω-Y while running and convert in the background when paused.</small>
+            <small>The main sequence uses this notation. Progress bars convert in the background when paused, or instantly while running if enabled below.</small>
         </div>
         <div class="header-row">
-            <label for="limit_scratch_bars">
-                <input type="checkbox" id="limit_scratch_bars">
-                Show only the last 40 progress bars (reduces notation lag)
+            <label for="auto_convert_running_bars">
+                <input type="checkbox" id="auto_convert_running_bars">
+                Auto-convert progress bars while running
+            </label>
+        </div>
+        <div class="header-row scratch-pagination-row">
+            <button type="button" id="scratch_prev_page">Previous page</button>
+            <button type="button" id="scratch_next_page">Next page</button>
+            <span id="scratch_page_info">Page 1 / 1 (0 bars)</span>
+            <label for="scratch_page_input">
+                Go to page (0 = none):
+                <input type="number" id="scratch_page_input" value="0" min="0" step="1">
             </label>
         </div>
 
