@@ -12,6 +12,7 @@ assert.ok(html.includes('id="scratch_prev_page"'));
 assert.ok(html.includes('id="scratch_next_page"'));
 assert.ok(html.includes('id="scratch_page_info"'));
 assert.ok(html.includes('id="scratch_page_input"'));
+assert.ok(html.includes('id="auto_convert_running_bars"'));
 
 const code = source.slice(
     source.indexOf('var scratch_bar_elements = []'),
@@ -22,6 +23,7 @@ const elements = [];
 const prevBtn = { listeners: {}, addEventListener(ev, fn) { this.listeners[ev] = fn; } };
 const nextBtn = { listeners: {}, addEventListener(ev, fn) { this.listeners[ev] = fn; } };
 const pageInput = { value: '0', listeners: {}, addEventListener(ev, fn) { this.listeners[ev] = fn; } };
+const autoConvertInput = { checked: false, listeners: {}, addEventListener(ev, fn) { this.listeners[ev] = fn; } };
 const pageInfo = { textContent: '' };
 const scratchContent = {
     scrollTop: 0,
@@ -39,7 +41,8 @@ const byId = {
     scratch_prev_page: prevBtn,
     scratch_next_page: nextBtn,
     scratch_page_input: pageInput,
-    scratch_page_info: pageInfo
+    scratch_page_info: pageInfo,
+    auto_convert_running_bars: autoConvertInput
 };
 
 const context = {
@@ -209,11 +212,21 @@ assert.equal(elements[0]._label.innerHTML, 'converted');
 context.paused = false;
 context.update_scratch_bars(1, 0);
 assert.equal(elements[0]._label.innerHTML, 'ord50');
-context.paused = true;
+
+// Enabling auto-convert while running converts and shows converted labels even when unpaused.
+autoConvertInput.checked = true;
+context.update_scratch_bars(1, 0);
+assert.equal(elements[0]._label.innerHTML, 'converted');
 assert.equal(worker.requests.length, 2);
 assert.equal(worker.requests[1].ord, 'ord51');
 
+// Disabling auto-convert while running returns to raw ω-Y labels until paused.
+autoConvertInput.checked = false;
+context.update_scratch_bars(1, 0);
+assert.equal(elements[0]._label.innerHTML, 'ord50');
+
 // A late result for a previous chain is cached but never applied to a new bar.
+context.paused = true;
 pageInput.value = '0';
 chain(10);
 worker.onmessage({ data: { key: worker.requests[1].key, label: 'stale' } });

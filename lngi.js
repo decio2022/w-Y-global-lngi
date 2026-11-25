@@ -202,6 +202,13 @@ var progress_conversion_worker = null
 var progress_conversion_pending = false
 var progress_conversion_unavailable = false
 
+function should_convert_scratch_bars() {
+    if (scratch_bar_display === "wY") return false
+    if (isPaused()) return true
+    const autoConvert = document.getElementById("auto_convert_running_bars")
+    return Boolean(autoConvert && autoConvert.checked)
+}
+
 function progress_bar_label(ord, mode) {
     if (mode === "wY") return ord
     const key = convert_cache_key(ord, mode)
@@ -213,6 +220,9 @@ function progress_bar_label(ord, mode) {
             progress_conversion_worker.onmessage = ({ data }) => {
                 convert_cache_put(data.key, data.label)
                 progress_conversion_pending = false
+                if (page == 1 && should_convert_scratch_bars()) {
+                    refresh_scratch_bars_now()
+                }
             }
             progress_conversion_worker.onerror = error => {
                 console.warn("Progress bar conversion worker failed; showing ω-Y labels.", error)
@@ -303,6 +313,10 @@ function scratch_pagination_init() {
             refresh_scratch_bars_now()
         })
     }
+    const autoConvert = document.getElementById("auto_convert_running_bars")
+    if (autoConvert) {
+        autoConvert.addEventListener("change", () => refresh_scratch_bars_now())
+    }
 }
 
 function update_scratch_bars(x, currentSimulatedTime) {
@@ -334,6 +348,8 @@ function update_scratch_bars(x, currentSimulatedTime) {
     scratch_bar_count = count
     for (let slot = count; slot < scratch_bar_created; slot++) hide_scratch_bar(slot)
 
+    const convertBars = should_convert_scratch_bars()
+
     for (let slot = 0; slot < count; slot++) {
         const i = start + slot
         const bar = scratch_bar_elements[slot]
@@ -342,7 +358,7 @@ function update_scratch_bars(x, currentSimulatedTime) {
         const secondsLeft = i === last ? lt : Math.max(0,
             (get_time_inv(scratch_bar_boundary(i, x)) - currentSimulatedTime) / 1000)
         const ordText = scratch_bar_sequence(i)
-        const label = isPaused() && scratch_bar_display !== "wY"
+        const label = convertBars
             ? progress_bar_label(ordText, scratch_bar_display) : ordText
         if (label !== scratch_bar_label_cache[slot]) {
             scratch_bar_label_cache[slot] = label
