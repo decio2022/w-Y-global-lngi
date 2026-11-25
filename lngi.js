@@ -486,11 +486,14 @@ var super_list = []
 
 // Include last terms up to and including 2048 in the countdown bars.
 const NTL_MAX_LAST_TERM = 2048
-// Uncapped bar generation: pagination limits DOM rendering to 50 bars per page.
+// Uncapped bar generation before reaching 1,3 (m < 4); once 1,3 is reached
+// (m >= 4), cap the chain back to 100 bars (2 pages of 50 bars).
 var NTL_MAX_BARS = Infinity
+var NTL_MAX_BARS_AFTER_1_3 = 100
 
 function ntl(m) {
     super_list = []
+    var maxBars = m >= 4 ? Math.min(NTL_MAX_BARS, NTL_MAX_BARS_AFTER_1_3) : NTL_MAX_BARS
     var ord = `1,${Math.max(1, Math.floor(m))}`
     var steps = 0
     var m = 1 - (m % 1)
@@ -498,7 +501,7 @@ function ntl(m) {
     // sequence to show (it popped onto one, or stopped at a too-large term), so
     // the closing pop below must not run again.
     var finished = false
-    while (super_list.length < NTL_MAX_BARS) {
+    while (super_list.length < maxBars) {
         super_list.push([ord, steps, m])
         if (m <= 1e-14) {
             break

@@ -233,7 +233,8 @@ worker.onmessage({ data: { key: worker.requests[1].key, label: 'stale' } });
 context.update_scratch_bars(1, 0);
 assert.equal(elements[1]._label.innerHTML, 'ord1');
 
-// Deep chains (> 1000 bars) are not truncated by NTL_MAX_BARS.
+// Deep chains (> 1000 bars) are not truncated before reaching 1,3 (u < 4),
+// and once 1,3 is reached (u >= 4) chains cap back to 100 bars.
 const convSource = fs.readFileSync('conv.js', 'utf8');
 const ntlSlice = source.slice(
     source.indexOf('var super_list = []'),
@@ -249,7 +250,13 @@ vm.createContext(ntlCtx);
 vm.runInContext(convSource, ntlCtx);
 vm.runInContext(ntlSlice, ntlCtx);
 ntlCtx.num_to_lngi(3.998046875);
-assert.ok(ntlCtx.super_list.length > 1000, `Expected >1000 bars, got ${ntlCtx.super_list.length}`);
+assert.ok(ntlCtx.super_list.length > 1000, `Expected >1000 bars before 1,3, got ${ntlCtx.super_list.length}`);
+assert.equal(ntlCtx.num_to_lngi(4)[0], '1,3');
+assert.ok(ntlCtx.super_list.length <= 100);
+ntlCtx.num_to_lngi(4.1);
+assert.equal(ntlCtx.super_list.length, 100);
+ntlCtx.num_to_lngi(3.998046875);
+assert.ok(ntlCtx.super_list.length > 1000);
 
 // The main display follows the selected notation without changing the source.
 const mainFunction = source.slice(source.indexOf('var current_main_sequence = null'), source.indexOf('function num_time('));
